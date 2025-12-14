@@ -15,8 +15,8 @@ import { setNestedValue } from "./utils/index.js";
  * @internal
  */
 function hasStringReplacement<Entity extends object>(
-  options: FieldOptions<Entity, any, any>
-): options is ReplacementFieldOptions<Entity, any, any> {
+  options: FieldOptions<Entity, FieldType, string>
+): options is ReplacementFieldOptions<Entity, FieldType, string> {
   return "replacement" in options && typeof options.replacement === "string";
 }
 
@@ -25,8 +25,8 @@ function hasStringReplacement<Entity extends object>(
  * @internal
  */
 function hasCallbackReplacement<Entity extends object>(
-  options: FieldOptions<Entity, any, any>
-): options is ReplacementCallbackFieldOptions<Entity, any> {
+  options: FieldOptions<Entity, FieldType, string>
+): options is ReplacementCallbackFieldOptions<Entity, FieldType> {
   return "replacement" in options && typeof options.replacement === "function";
 }
 
@@ -36,9 +36,19 @@ function hasCallbackReplacement<Entity extends object>(
  */
 function isOperator(key: string): key is Operator {
   const operators: Operator[] = [
-    "$eq", "$ne", "$lt", "$gt", "$lte", "$gte",
-    "$in", "$nin", "$like", "$ilike", "$fulltext",
-    "$contains", "$overlap",
+    "$eq",
+    "$ne",
+    "$lt",
+    "$gt",
+    "$lte",
+    "$gte",
+    "$in",
+    "$nin",
+    "$like",
+    "$ilike",
+    "$fulltext",
+    "$contains",
+    "$overlap",
   ];
   return operators.includes(key as Operator);
 }
@@ -155,7 +165,7 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
 
   private readonly fieldOptionsMap = new Map<
     string,
-    FieldOptions<Entity, any, any>
+    FieldOptions<Entity, FieldType, string>
   >();
 
   /**
@@ -231,7 +241,11 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
     // Build callback replacement map
     const callbackReplacementMap = new Map<
       string,
-      (args: { field: string; operator: Operator; value: unknown }) => FilterQuery<Entity>
+      (args: {
+        field: string;
+        operator: Operator;
+        value: unknown;
+      }) => FilterQuery<Entity>
     >();
     // Build fulltext fields set
     const fulltextFields = new Set<string>();
@@ -240,14 +254,24 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
       if (hasStringReplacement(field)) {
         stringReplacementMap.set(field.field, field.replacement);
       } else if (hasCallbackReplacement(field)) {
-        callbackReplacementMap.set(field.field, field.replacement as (args: { field: string; operator: Operator; value: unknown }) => FilterQuery<Entity>);
+        callbackReplacementMap.set(
+          field.field,
+          field.replacement as (args: {
+            field: string;
+            operator: Operator;
+            value: unknown;
+          }) => FilterQuery<Entity>
+        );
       }
       if (field.fulltext) {
         fulltextFields.add(field.field);
       }
     }
 
-    const hasTransforms = stringReplacementMap.size > 0 || callbackReplacementMap.size > 0 || fulltextFields.size > 0;
+    const hasTransforms =
+      stringReplacementMap.size > 0 ||
+      callbackReplacementMap.size > 0 ||
+      fulltextFields.size > 0;
 
     // Parse field value to extract operator and value pairs
     const parseFieldValue = (
@@ -262,7 +286,10 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
       const entries = Object.entries(fieldValue as Record<string, unknown>);
       return entries
         .filter(([key]) => isOperator(key))
-        .map(([operator, value]) => ({ operator: operator as Operator, value }));
+        .map(([operator, value]) => ({
+          operator: operator as Operator,
+          value,
+        }));
     };
 
     // Recursively apply field name replacements
