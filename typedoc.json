@@ -1,0 +1,25 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["./src/index.ts"],
+  "plugin": ["typedoc-plugin-coverage"],
+  "exclude": ["**/node_modules/**", "**/temp/**", "**/test/**"],
+  "skipErrorChecking": true,
+  "emit": "none",
+  "requiredToBeDocumented": [
+    "Accessor",
+    "Class",
+    "Enum",
+    "EnumMember",
+    "Function",
+    "Interface",
+    "Method",
+    "Property",
+    "TypeAlias",
+    "Variable"
+  ],
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "notDocumented": true
+  }
+}

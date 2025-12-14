@@ -1,0 +1,40 @@
+name: Check Pull Request
+
+on:
+  push:
+    branches:
+      - master
+      - beta
+      - alpha
+      - "*.x"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        id: pnpm-install
+        with:
+          run_install: |
+            - recursive: true
+              args: [--frozen-lockfile]
+
+      - name: Test
+        run: npm run test:coverage
+
+      - name: Coverage
+        uses: codecov/codecov-action@v1
