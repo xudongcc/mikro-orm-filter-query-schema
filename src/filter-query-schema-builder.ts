@@ -1,13 +1,14 @@
 import { FilterQuery } from "@mikro-orm/core";
 import { z } from "zod";
 
+import { FilterOptions } from "./interfaces/filter-options.interface.js";
 import {
   FieldOptions,
+  FieldType,
+  Operator,
   ReplacementCallbackFieldOptions,
   ReplacementFieldOptions,
-} from "./interfaces/field-options.interface.js";
-import { FilterOptions } from "./interfaces/filter-options.interface.js";
-import { FieldType, Operator } from "./types/index.js";
+} from "./types/index.js";
 import { setNestedValue } from "./utils/index.js";
 
 /**
@@ -44,8 +45,6 @@ function isOperator(key: string): key is Operator {
     "$gte",
     "$in",
     "$nin",
-    "$like",
-    "$ilike",
     "$fulltext",
     "$contains",
     "$overlap",
@@ -81,7 +80,7 @@ function getValueSchema(type: FieldType): z.ZodTypeAny {
 function createTypedComparisonSchema(
   type: FieldType,
   maxArrayLength: number,
-  options?: { array?: boolean }
+  options?: { array?: boolean; fulltext?: boolean }
 ): z.ZodTypeAny {
   const valueSchema = getValueSchema(type);
   const valueWithNull = z.union([valueSchema, z.null()]);
@@ -113,6 +112,11 @@ function createTypedComparisonSchema(
       .array(valueSchema)
       .max(maxArrayLength)
       .optional();
+  }
+
+  // Fulltext search operator (only for string fields)
+  if (options?.fulltext) {
+    comparisonFields.$fulltext = valueSchema.optional();
   }
 
   const comparisonObjectSchema = z.object(comparisonFields).strict();
@@ -203,7 +207,10 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
     Type extends "string" | "number" | "boolean" | "date" = never,
     Field extends string = never,
   >(options: FieldOptions<Entity, Type, Field>): this {
-    this.fieldOptionsMap.set(options.field, options);
+    this.fieldOptionsMap.set(
+      options.field,
+      options as unknown as FieldOptions<Entity, FieldType, string>
+    );
     return this;
   }
 
@@ -247,8 +254,6 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
         value: unknown;
       }) => FilterQuery<Entity>
     >();
-    // Build fulltext fields set
-    const fulltextFields = new Set<string>();
 
     for (const field of fieldOptions) {
       if (hasStringReplacement(field)) {
@@ -263,15 +268,10 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
           }) => FilterQuery<Entity>
         );
       }
-      if (field.fulltext) {
-        fulltextFields.add(field.field);
-      }
     }
 
     const hasTransforms =
-      stringReplacementMap.size > 0 ||
-      callbackReplacementMap.size > 0 ||
-      fulltextFields.size > 0;
+      stringReplacementMap.size > 0 || callbackReplacementMap.size > 0;
 
     // Parse field value to extract operator and value pairs
     const parseFieldValue = (
@@ -314,10 +314,9 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
         ) {
           result[key] = applyReplacements(value as Record<string, unknown>);
         } else {
-          // For field conditions, check if replacement or fulltext transform is needed
+          // For field conditions, check if replacement is needed
           const stringReplacement = stringReplacementMap.get(key);
           const callbackReplacement = callbackReplacementMap.get(key);
-          const isFulltextField = fulltextFields.has(key);
 
           if (callbackReplacement) {
             // Apply callback replacement
@@ -334,14 +333,6 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
           } else if (stringReplacement) {
             // Apply string path replacement as nested object
             setNestedValue(result, stringReplacement, value);
-          } else if (isFulltextField) {
-            // Convert $eq to $fulltext for fulltext fields
-            const parsed = parseFieldValue(value);
-            if (parsed.length === 1 && parsed[0].operator === "$eq") {
-              result[key] = { $fulltext: parsed[0].value };
-            } else {
-              result[key] = value;
-            }
           } else {
             result[key] = value;
           }
@@ -357,7 +348,10 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
       const fieldComparisonSchema = createTypedComparisonSchema(
         field.type,
         maxArrayLength,
-        { array: field.array }
+        {
+          array: field.array,
+          fulltext: "fulltext" in field ? field.fulltext : undefined,
+        }
       );
       fieldSchemas[field.field] = fieldComparisonSchema.optional();
     }

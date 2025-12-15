@@ -46,7 +46,7 @@ const schema = new FilterQuerySchemaBuilder<User>()
 
 // Validate filter queries
 const result = schema.safeParse({
-  name: { $like: "%John%" },
+  name: "John",
   age: { $gte: 18 },
 });
 
@@ -123,13 +123,16 @@ const schema = new FilterQuerySchemaBuilder<Article>()
   })
   .build();
 
-// Input: { keyword: { $like: "%search%" } }
-// Output: { $or: [{ title: { $like: "%search%" } }, { content: { $like: "%search%" } }] }
+// Input: { keyword: "search" }
+// Output: { $or: [{ title: "search" }, { content: "search" }] }
+
+// Input: { keyword: { $ne: "excluded" } }
+// Output: { $or: [{ title: { $ne: "excluded" } }, { content: { $ne: "excluded" } }] }
 ```
 
 The callback receives an object with:
 - `field`: The original field name
-- `operator`: The operator being used (`$eq`, `$like`, `$in`, etc.)
+- `operator`: The operator being used (`$eq`, `$ne`, `$in`, `$fulltext`, etc.)
 - `value`: The value associated with the operator
 
 ## Supported Operators
@@ -183,26 +186,40 @@ interface FieldOptions {
   field: string;           // Field name
   type: "string" | "number" | "boolean" | "date";
   array?: boolean;         // Is array field (enables $contains, $overlap)
-  fulltext?: boolean;      // Enable fulltext search (auto-converts $eq to $fulltext)
+  fulltext?: boolean;      // Enable $fulltext operator (string fields only)
   replacement?: string | ((args: ReplacementCallbackArgs) => FilterQuery);
 }
 ```
 
 ### Fulltext Search
 
-When a field has `fulltext: true`, direct value assignments and `$eq` operators are automatically converted to `$fulltext`:
+When a string field has `fulltext: true`, the `$fulltext` operator becomes available for that field:
 
 ```typescript
 const schema = new FilterQuerySchemaBuilder<Article>()
   .addField({ field: "title", type: "string", fulltext: true })
+  .addField({ field: "content", type: "string" }) // no fulltext
   .build();
 
-// Input: { title: "search term" }
+// $fulltext is allowed for title
+schema.parse({ title: { $fulltext: "search term" } });
 // Output: { title: { $fulltext: "search term" } }
 
-// Input: { title: { $eq: "search term" } }
-// Output: { title: { $fulltext: "search term" } }
+// $fulltext is NOT allowed for content (will fail validation)
+schema.safeParse({ content: { $fulltext: "search" } }).success; // false
+
+// Other operators still work normally
+schema.parse({ title: { $eq: "exact match" } });
+// Output: { title: { $eq: "exact match" } }
 ```
+
+### Fulltext Search Operator
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `$fulltext` | Full-text search | `{ title: { $fulltext: "search term" } }` |
+
+> Note: The `$fulltext` operator is only available for string fields with `fulltext: true` option.
 
 ## Security
 

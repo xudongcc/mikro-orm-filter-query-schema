@@ -22,7 +22,7 @@ export interface ReplacementCallbackArgs<Type extends FieldType = never> {
   field: string;
 
   /**
-   * The operator being used (e.g., `$eq`, `$like`, `$in`).
+   * The operator being used (e.g., `$eq`, `$ne`, `$in`, `$fulltext`).
    */
   operator: Operator;
 

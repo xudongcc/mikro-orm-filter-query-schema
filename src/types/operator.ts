@@ -4,26 +4,24 @@
  * @remarks
  * Operators are categorized as:
  *
- * **Equality operators:**
+ * **Equality operators (all types):**
  * - `$eq` - Equal to
  * - `$ne` - Not equal to
  *
- * **Comparison operators (for string, number, date):**
+ * **Comparison operators (number, date only):**
  * - `$lt` - Less than
  * - `$gt` - Greater than
  * - `$lte` - Less than or equal to
  * - `$gte` - Greater than or equal to
  *
- * **Array operators:**
+ * **Array operators (all types):**
  * - `$in` - Value is in array
  * - `$nin` - Value is not in array
  *
- * **String operators:**
- * - `$like` - SQL LIKE pattern matching (case-sensitive)
- * - `$ilike` - SQL ILIKE pattern matching (case-insensitive)
+ * **Fulltext operator (string fields with fulltext: true only):**
  * - `$fulltext` - Full-text search
  *
- * **Array field operators:**
+ * **Array field operators (fields with array: true only):**
  * - `$contains` - Array contains all values
  * - `$overlap` - Array has any overlapping values
  */
@@ -36,8 +34,6 @@ export type Operator =
   | "$gte"
   | "$in"
   | "$nin"
-  | "$like"
-  | "$ilike"
   | "$fulltext"
   | "$contains"
   | "$overlap";

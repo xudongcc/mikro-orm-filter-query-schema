@@ -1,14 +1,14 @@
 import type { AutoPath, FilterQuery } from "@mikro-orm/core";
 
-import { type FieldType } from "../types/index.js";
-import { type ReplacementCallbackArgs } from "./replacement-callback-args.interface.js";
+import { type ReplacementCallbackArgs } from "../interfaces/replacement-callback-args.interface.js";
+import { type FieldType } from "./field-type.js";
 
 /**
  * Base configuration options shared by all field types.
  *
  * @typeParam Type - The field's data type
  */
-export interface BaseFieldOptions<Type extends FieldType = never> {
+export type BaseFieldOptions<Type extends FieldType = never> = {
   /**
    * The data type of the field, determines which operators are available.
    */
@@ -24,13 +24,16 @@ export interface BaseFieldOptions<Type extends FieldType = never> {
    * When true, enables `$contains` and `$overlap` operators.
    */
   array?: boolean;
-
-  /**
-   * Whether this field supports full-text search.
-   * When true, enables the `$fulltext` operator.
-   */
-  fulltext?: boolean;
-}
+} & (Type extends "string"
+  ? {
+      /**
+       * Whether this field supports full-text search operator.
+       * When true, allows the `$fulltext` operator to be used for this field.
+       * Only available for string fields.
+       */
+      fulltext?: boolean;
+    }
+  : object);
 
 /**
  * Field options for simple fields that map directly to entity properties.
@@ -43,15 +46,15 @@ export interface BaseFieldOptions<Type extends FieldType = never> {
  * builder.addField({ field: "name", type: "string" });
  * ```
  */
-export interface SimpleFieldOptions<
+export type SimpleFieldOptions<
   Entity extends object,
   Type extends FieldType = never,
-> extends BaseFieldOptions<Type> {
+> = BaseFieldOptions<Type> & {
   /**
    * The field name, must be a key of the entity.
    */
   field: Extract<keyof Entity, string>;
-}
+};
 
 /**
  * Field options with a string path replacement for nested entity properties.
@@ -69,16 +72,16 @@ export interface SimpleFieldOptions<
  * });
  * ```
  */
-export interface ReplacementFieldOptions<
+export type ReplacementFieldOptions<
   Entity extends object,
   Type extends FieldType = never,
   Field extends string = never,
-> extends BaseFieldOptions<Type> {
+> = BaseFieldOptions<Type> & {
   /**
    * The dot-notation path to replace the field with in the output.
    */
   replacement: Extract<AutoPath<Entity, Field>, string>;
-}
+};
 
 /**
  * Field options with a callback function for custom query transformation.
@@ -91,26 +94,26 @@ export interface ReplacementFieldOptions<
  * builder.addField({
  *   field: "keyword",
  *   type: "string",
- *   replacement: ({ value }) => ({
+ *   replacement: ({ operator, value }) => ({
  *     $or: [
- *       { title: { $like: `%${value}%` } },
- *       { content: { $like: `%${value}%` } }
+ *       { title: { [operator]: value } },
+ *       { content: { [operator]: value } }
  *     ]
  *   })
  * });
  * ```
  */
-export interface ReplacementCallbackFieldOptions<
+export type ReplacementCallbackFieldOptions<
   Entity extends object,
   Type extends FieldType = never,
-> extends BaseFieldOptions<Type> {
+> = BaseFieldOptions<Type> & {
   /**
    * A callback function that transforms the field value into a FilterQuery.
    * @param args - The replacement callback arguments containing field, operator, and value
    * @returns A FilterQuery object to be merged into the result
    */
   replacement?: (args: ReplacementCallbackArgs<Type>) => FilterQuery<Entity>;
-}
+};
 
 /**
  * Union type of all field option variants.

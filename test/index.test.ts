@@ -50,10 +50,16 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(schema.safeParse({ roles: { $overlap: ["admin", "user"] } }).success).toBe(true);
     });
 
-    it("should reject string operators ($like, $ilike, $fulltext)", () => {
+    it("should reject unsupported operators", () => {
+      // $like and $ilike are not supported
       expect(schema.safeParse({ name: { $like: "%John%" } }).success).toBe(false);
       expect(schema.safeParse({ name: { $ilike: "%john%" } }).success).toBe(false);
-      expect(schema.safeParse({ name: { $fulltext: "search term" } }).success).toBe(false);
+      expect(schema.safeParse({ name: { $regex: ".*" } }).success).toBe(false);
+    });
+
+    it("should allow $fulltext when fulltext: true is set", () => {
+      // name has fulltext: true in createUserBuilder
+      expect(schema.safeParse({ name: { $fulltext: "search term" } }).success).toBe(true);
     });
 
     it("should validate logical operators", () => {
@@ -448,9 +454,13 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(schema.safeParse({ roles: { $overlap: ["admin", "user"] } }).success).toBe(true);
     });
 
-    it("should not allow $fulltext operator directly (use fulltext field option instead)", () => {
-      // $fulltext is not a valid user-facing operator
-      expect(schema.safeParse({ name: { $fulltext: "search" } }).success).toBe(false);
+    it("should allow $fulltext for fields with fulltext: true", () => {
+      // name has fulltext: true in createUserBuilder, so $fulltext should be allowed
+      expect(schema.safeParse({ name: { $fulltext: "search" } }).success).toBe(true);
+    });
+
+    it("should not allow $fulltext for non-string fields", () => {
+      // $fulltext is not valid for non-string fields like number
       expect(schema.safeParse({ age: { $fulltext: "search" } }).success).toBe(false);
     });
 
@@ -722,20 +732,14 @@ describe("FilterQuerySchemaBuilder", () => {
           field: "keyword",
           type: "string",
           replacement: ({ value }) => ({
-            $or: [
-              { title: { $like: `%${value}%` } },
-              { content: { $like: `%${value}%` } },
-            ],
+            $or: [{ title: value }, { content: value }],
           }),
         })
         .build();
 
       const result = schema.parse({ keyword: "test" });
       expect(result).toEqual({
-        $or: [
-          { title: { $like: "%test%" } },
-          { content: { $like: "%test%" } },
-        ],
+        $or: [{ title: "test" }, { content: "test" }],
       });
     });
 
@@ -769,7 +773,7 @@ describe("FilterQuerySchemaBuilder", () => {
           field: "keyword",
           type: "string",
           replacement: ({ value }) => ({
-            title: { $like: `%${value}%` },
+            title: value,
           }),
         })
         .build();
@@ -778,7 +782,7 @@ describe("FilterQuerySchemaBuilder", () => {
         $and: [{ id: 1 }, { keyword: "test" }],
       });
       expect(result).toEqual({
-        $and: [{ id: 1 }, { title: { $like: "%test%" } }],
+        $and: [{ id: 1 }, { title: "test" }],
       });
     });
 
@@ -788,7 +792,7 @@ describe("FilterQuerySchemaBuilder", () => {
           field: "keyword",
           type: "string",
           replacement: ({ value }) => ({
-            title: { $like: `%${value}%` },
+            title: value,
           }),
         })
         .build();
@@ -797,10 +801,7 @@ describe("FilterQuerySchemaBuilder", () => {
         $or: [{ keyword: "foo" }, { keyword: "bar" }],
       });
       expect(result).toEqual({
-        $or: [
-          { title: { $like: "%foo%" } },
-          { title: { $like: "%bar%" } },
-        ],
+        $or: [{ title: "foo" }, { title: "bar" }],
       });
     });
 
@@ -810,7 +811,7 @@ describe("FilterQuerySchemaBuilder", () => {
           field: "keyword",
           type: "string",
           replacement: ({ value }) => ({
-            title: { $like: `%${value}%` },
+            title: value,
           }),
         })
         .build();
@@ -819,7 +820,7 @@ describe("FilterQuerySchemaBuilder", () => {
         $not: { keyword: "test" },
       });
       expect(result).toEqual({
-        $not: { title: { $like: "%test%" } },
+        $not: { title: "test" },
       });
     });
 
@@ -843,7 +844,7 @@ describe("FilterQuerySchemaBuilder", () => {
           field: "keyword",
           type: "string",
           replacement: ({ value }) => ({
-            title: { $like: `%${value}%` },
+            title: value,
           }),
         })
         .build();
@@ -856,7 +857,7 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(result).toEqual({
         id: 1,
         author: { name: "John" },
-        title: { $like: "%hello%" },
+        title: "hello",
       });
     });
 
@@ -886,106 +887,157 @@ describe("FilterQuerySchemaBuilder", () => {
     });
   });
 
-  describe("Fulltext field transformation", () => {
+  describe("Fulltext field option", () => {
     interface Article {
       id: number;
       title: string;
       content: string;
     }
 
-    it("should convert $eq to $fulltext for fulltext fields", () => {
+    it("should allow $fulltext operator when fulltext: true", () => {
       const schema = new FilterQuerySchemaBuilder<Article>()
         .addField({ field: "id", type: "number" })
         .addField({ field: "title", type: "string", fulltext: true })
         .build();
 
-      const result = schema.parse({ title: "search term" });
+      expect(schema.safeParse({ title: { $fulltext: "search term" } }).success).toBe(true);
+      const result = schema.parse({ title: { $fulltext: "search term" } });
       expect(result).toEqual({ title: { $fulltext: "search term" } });
     });
 
-    it("should convert explicit $eq to $fulltext for fulltext fields", () => {
+    it("should not allow $fulltext operator when fulltext is not set", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "title", type: "string" })
+        .build();
+
+      expect(schema.safeParse({ title: { $fulltext: "search term" } }).success).toBe(false);
+    });
+
+    it("should allow both $fulltext and other operators for fulltext fields", () => {
       const schema = new FilterQuerySchemaBuilder<Article>()
         .addField({ field: "title", type: "string", fulltext: true })
         .build();
 
-      const result = schema.parse({ title: { $eq: "search term" } });
-      expect(result).toEqual({ title: { $fulltext: "search term" } });
+      // $fulltext should work
+      expect(schema.safeParse({ title: { $fulltext: "search" } }).success).toBe(true);
+
+      // Other operators should also work
+      expect(schema.safeParse({ title: { $eq: "exact" } }).success).toBe(true);
+      expect(schema.safeParse({ title: { $ne: "excluded" } }).success).toBe(true);
+      expect(schema.safeParse({ title: { $in: ["a", "b"] } }).success).toBe(true);
     });
 
-    it("should not convert other operators for fulltext fields", () => {
-      const schema = new FilterQuerySchemaBuilder<Article>()
-        .addField({ field: "title", type: "string", fulltext: true })
-        .build();
-
-      // $ne should remain as is
-      const result1 = schema.parse({ title: { $ne: "excluded" } });
-      expect(result1).toEqual({ title: { $ne: "excluded" } });
-
-      // $in should remain as is
-      const result2 = schema.parse({ title: { $in: ["a", "b"] } });
-      expect(result2).toEqual({ title: { $in: ["a", "b"] } });
-    });
-
-    it("should convert fulltext in $and", () => {
+    it("should allow $fulltext in $and", () => {
       const schema = new FilterQuerySchemaBuilder<Article>()
         .addField({ field: "id", type: "number" })
         .addField({ field: "title", type: "string", fulltext: true })
         .build();
 
       const result = schema.parse({
-        $and: [{ id: 1 }, { title: "search" }],
+        $and: [{ id: 1 }, { title: { $fulltext: "search" } }],
       });
       expect(result).toEqual({
         $and: [{ id: 1 }, { title: { $fulltext: "search" } }],
       });
     });
 
-    it("should convert fulltext in $or", () => {
+    it("should allow $fulltext in $or", () => {
       const schema = new FilterQuerySchemaBuilder<Article>()
         .addField({ field: "title", type: "string", fulltext: true })
         .build();
 
       const result = schema.parse({
-        $or: [{ title: "foo" }, { title: "bar" }],
+        $or: [{ title: { $fulltext: "foo" } }, { title: { $fulltext: "bar" } }],
       });
       expect(result).toEqual({
         $or: [{ title: { $fulltext: "foo" } }, { title: { $fulltext: "bar" } }],
       });
     });
 
-    it("should convert fulltext in $not", () => {
+    it("should allow $fulltext in $not", () => {
       const schema = new FilterQuerySchemaBuilder<Article>()
         .addField({ field: "title", type: "string", fulltext: true })
         .build();
 
       const result = schema.parse({
-        $not: { title: "excluded" },
+        $not: { title: { $fulltext: "excluded" } },
       });
       expect(result).toEqual({
         $not: { title: { $fulltext: "excluded" } },
       });
     });
 
-    it("should not affect non-fulltext string fields", () => {
+    it("should not allow $fulltext for non-fulltext string fields", () => {
       const schema = new FilterQuerySchemaBuilder<Article>()
         .addField({ field: "title", type: "string", fulltext: true })
         .addField({ field: "content", type: "string" })
         .build();
 
-      const result = schema.parse({ title: "search", content: "regular" });
-      expect(result).toEqual({
-        title: { $fulltext: "search" },
-        content: "regular",
-      });
+      // title has fulltext: true, should allow $fulltext
+      expect(schema.safeParse({ title: { $fulltext: "search" } }).success).toBe(true);
+
+      // content does not have fulltext: true, should not allow $fulltext
+      expect(schema.safeParse({ content: { $fulltext: "search" } }).success).toBe(false);
     });
 
-    it("should handle null values for fulltext fields", () => {
+    it("should not allow $fulltext for number fields", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "id", type: "number" })
+        .build();
+
+      expect(schema.safeParse({ id: { $fulltext: "search" } }).success).toBe(false);
+    });
+
+    it("should reject invalid value types for $fulltext", () => {
       const schema = new FilterQuerySchemaBuilder<Article>()
         .addField({ field: "title", type: "string", fulltext: true })
         .build();
 
-      const result = schema.parse({ title: null });
-      expect(result).toEqual({ title: { $fulltext: null } });
+      // $fulltext should only accept string values
+      expect(schema.safeParse({ title: { $fulltext: 123 } }).success).toBe(false);
+      expect(schema.safeParse({ title: { $fulltext: true } }).success).toBe(false);
+      expect(schema.safeParse({ title: { $fulltext: ["array"] } }).success).toBe(false);
+      expect(schema.safeParse({ title: { $fulltext: { nested: "object" } } }).success).toBe(false);
+    });
+
+    it("should allow combining $fulltext with other operators", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "title", type: "string", fulltext: true })
+        .build();
+
+      // Can use multiple operators on the same field
+      expect(schema.safeParse({ title: { $fulltext: "search", $ne: "excluded" } }).success).toBe(true);
+    });
+
+    it("should not allow $fulltext in nested $and when field does not have fulltext option", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "id", type: "number" })
+        .addField({ field: "content", type: "string" })
+        .build();
+
+      expect(schema.safeParse({
+        $and: [{ content: { $fulltext: "search" } }]
+      }).success).toBe(false);
+    });
+
+    it("should not allow $fulltext in nested $or when field does not have fulltext option", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "content", type: "string" })
+        .build();
+
+      expect(schema.safeParse({
+        $or: [{ content: { $fulltext: "foo" } }, { content: { $fulltext: "bar" } }]
+      }).success).toBe(false);
+    });
+
+    it("should not allow $fulltext in $not when field does not have fulltext option", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "content", type: "string" })
+        .build();
+
+      expect(schema.safeParse({
+        $not: { content: { $fulltext: "excluded" } }
+      }).success).toBe(false);
     });
   });
 });
