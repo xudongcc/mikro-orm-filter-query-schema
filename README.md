@@ -187,6 +187,7 @@ interface FieldOptions {
   type: "string" | "number" | "boolean" | "date";
   array?: boolean;         // Is array field (enables $contains, $overlap)
   fulltext?: boolean;      // Enable $fulltext operator (string fields only)
+  prefix?: boolean;        // Enable $prefix operator (string fields only)
   replacement?: string | ((args: ReplacementCallbackArgs) => FilterQuery);
 }
 ```
@@ -220,6 +221,36 @@ schema.parse({ title: { $eq: "exact match" } });
 | `$fulltext` | Full-text search | `{ title: { $fulltext: "search term" } }` |
 
 > Note: The `$fulltext` operator is only available for string fields with `fulltext: true` option.
+
+### Prefix Search
+
+When a string field has `prefix: true`, the `$prefix` operator becomes available for that field. The `$prefix` operator is converted to `$like` with the value appended with `%`, and special characters (`%`, `_`, `\`) are automatically escaped:
+
+```typescript
+const schema = new FilterQuerySchemaBuilder<Article>()
+  .addField({ field: "title", type: "string", prefix: true })
+  .addField({ field: "content", type: "string" }) // no prefix
+  .build();
+
+// $prefix is allowed for title
+schema.parse({ title: { $prefix: "Hello" } });
+// Output: { title: { $like: "Hello%" } }
+
+// Special characters are escaped
+schema.parse({ title: { $prefix: "100%" } });
+// Output: { title: { $like: "100\\%%" } }
+
+// $prefix is NOT allowed for content (will fail validation)
+schema.safeParse({ content: { $prefix: "Hello" } }).success; // false
+```
+
+### Prefix Search Operator
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `$prefix` | Prefix search (converted to $like) | `{ title: { $prefix: "Hello" } }` → `{ title: { $like: "Hello%" } }` |
+
+> Note: The `$prefix` operator is only available for string fields with `prefix: true` option.
 
 ## Security
 

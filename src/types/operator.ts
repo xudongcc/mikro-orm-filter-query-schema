@@ -21,6 +21,9 @@
  * **Fulltext operator (string fields with fulltext: true only):**
  * - `$fulltext` - Full-text search
  *
+ * **Prefix operator (string fields with prefix: true only):**
+ * - `$prefix` - Prefix search (converted to $like with value%)
+ *
  * **Array field operators (fields with array: true only):**
  * - `$contains` - Array contains all values
  * - `$overlap` - Array has any overlapping values
@@ -35,5 +38,6 @@ export type Operator =
   | "$in"
   | "$nin"
   | "$fulltext"
+  | "$prefix"
   | "$contains"
   | "$overlap";

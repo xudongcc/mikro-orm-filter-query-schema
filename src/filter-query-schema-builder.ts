@@ -46,10 +46,19 @@ function isOperator(key: string): key is Operator {
     "$in",
     "$nin",
     "$fulltext",
+    "$prefix",
     "$contains",
     "$overlap",
   ];
   return operators.includes(key as Operator);
+}
+
+/**
+ * Escapes special characters for LIKE pattern matching.
+ * @internal
+ */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[%_\\]/g, "\\$&");
 }
 
 /**
@@ -80,7 +89,7 @@ function getValueSchema(type: FieldType): z.ZodTypeAny {
 function createTypedComparisonSchema(
   type: FieldType,
   maxArrayLength: number,
-  options?: { array?: boolean; fulltext?: boolean }
+  options?: { array?: boolean; fulltext?: boolean; prefix?: boolean }
 ): z.ZodTypeAny {
   const valueSchema = getValueSchema(type);
   const valueWithNull = z.union([valueSchema, z.null()]);
@@ -117,6 +126,11 @@ function createTypedComparisonSchema(
   // Fulltext search operator (only for string fields)
   if (options?.fulltext) {
     comparisonFields.$fulltext = valueSchema.optional();
+  }
+
+  // Prefix search operator (only for string fields)
+  if (options?.prefix) {
+    comparisonFields.$prefix = valueSchema.optional();
   }
 
   const comparisonObjectSchema = z.object(comparisonFields).strict();
@@ -270,8 +284,18 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
       }
     }
 
+    // Build prefix field set
+    const prefixFieldSet = new Set<string>();
+    for (const field of fieldOptions) {
+      if ("prefix" in field && field.prefix) {
+        prefixFieldSet.add(field.field);
+      }
+    }
+
     const hasTransforms =
-      stringReplacementMap.size > 0 || callbackReplacementMap.size > 0;
+      stringReplacementMap.size > 0 ||
+      callbackReplacementMap.size > 0 ||
+      prefixFieldSet.size > 0;
 
     // Parse field value to extract operator and value pairs
     const parseFieldValue = (
@@ -290,6 +314,30 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
           operator: operator as Operator,
           value,
         }));
+    };
+
+    // Transform $prefix operator to $like with escaped value and % suffix
+    const transformPrefixOperator = (
+      fieldValue: unknown
+    ): unknown => {
+      if (fieldValue === null || typeof fieldValue !== "object") {
+        return fieldValue;
+      }
+
+      const obj = fieldValue as Record<string, unknown>;
+      if (!("$prefix" in obj)) {
+        return fieldValue;
+      }
+
+      const result: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(obj)) {
+        if (key === "$prefix" && typeof value === "string") {
+          result["$like"] = escapeLikePattern(value) + "%";
+        } else {
+          result[key] = value;
+        }
+      }
+      return result;
     };
 
     // Recursively apply field name replacements
@@ -317,10 +365,16 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
           // For field conditions, check if replacement is needed
           const stringReplacement = stringReplacementMap.get(key);
           const callbackReplacement = callbackReplacementMap.get(key);
+          const isPrefixField = prefixFieldSet.has(key);
+
+          // Transform $prefix to $like if this is a prefix field
+          const transformedValue = isPrefixField
+            ? transformPrefixOperator(value)
+            : value;
 
           if (callbackReplacement) {
             // Apply callback replacement
-            const parsed = parseFieldValue(value);
+            const parsed = parseFieldValue(transformedValue);
             for (const { operator, value: parsedValue } of parsed) {
               const replacement = callbackReplacement({
                 field: key,
@@ -332,9 +386,9 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
             }
           } else if (stringReplacement) {
             // Apply string path replacement as nested object
-            setNestedValue(result, stringReplacement, value);
+            setNestedValue(result, stringReplacement, transformedValue);
           } else {
-            result[key] = value;
+            result[key] = transformedValue;
           }
         }
       }
@@ -351,6 +405,7 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
         {
           array: field.array,
           fulltext: "fulltext" in field ? field.fulltext : undefined,
+          prefix: "prefix" in field ? field.prefix : undefined,
         }
       );
       fieldSchemas[field.field] = fieldComparisonSchema.optional();

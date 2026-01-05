@@ -1040,4 +1040,224 @@ describe("FilterQuerySchemaBuilder", () => {
       }).success).toBe(false);
     });
   });
+
+  describe("Prefix search", () => {
+    interface Article {
+      id: number;
+      title: string;
+      content: string;
+    }
+
+    it("should allow $prefix operator when prefix: true", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "id", type: "number" })
+        .addField({ field: "title", type: "string", prefix: true })
+        .build();
+
+      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(true);
+    });
+
+    it("should transform $prefix to $like with % suffix", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "title", type: "string", prefix: true })
+        .build();
+
+      const result = schema.parse({ title: { $prefix: "Hello" } });
+      expect(result).toEqual({ title: { $like: "Hello%" } });
+    });
+
+    it("should escape special characters in $prefix value", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "title", type: "string", prefix: true })
+        .build();
+
+      // % should be escaped
+      const result1 = schema.parse({ title: { $prefix: "100%" } });
+      expect(result1).toEqual({ title: { $like: "100\\%%" } });
+
+      // _ should be escaped
+      const result2 = schema.parse({ title: { $prefix: "hello_world" } });
+      expect(result2).toEqual({ title: { $like: "hello\\_world%" } });
+
+      // \ should be escaped
+      const result3 = schema.parse({ title: { $prefix: "path\\to" } });
+      expect(result3).toEqual({ title: { $like: "path\\\\to%" } });
+
+      // Multiple special characters
+      const result4 = schema.parse({ title: { $prefix: "50%_off\\" } });
+      expect(result4).toEqual({ title: { $like: "50\\%\\_off\\\\%" } });
+    });
+
+    it("should not allow $prefix operator when prefix is not set", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "title", type: "string" })
+        .build();
+
+      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(false);
+    });
+
+    it("should allow both $prefix and other operators for prefix fields", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "title", type: "string", prefix: true })
+        .build();
+
+      // $prefix should work
+      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(true);
+
+      // Other operators should still work
+      expect(schema.safeParse({ title: { $eq: "Hello" } }).success).toBe(true);
+      expect(schema.safeParse({ title: { $ne: "Hello" } }).success).toBe(true);
+      expect(schema.safeParse({ title: { $in: ["Hello", "World"] } }).success).toBe(true);
+    });
+
+    it("should allow $prefix in $and", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "id", type: "number" })
+        .addField({ field: "title", type: "string", prefix: true })
+        .build();
+
+      const result = schema.parse({
+        $and: [{ id: 1 }, { title: { $prefix: "Hello" } }],
+      });
+      expect(result).toEqual({
+        $and: [{ id: 1 }, { title: { $like: "Hello%" } }],
+      });
+    });
+
+    it("should allow $prefix in $or", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "title", type: "string", prefix: true })
+        .build();
+
+      const result = schema.parse({
+        $or: [{ title: { $prefix: "foo" } }, { title: { $prefix: "bar" } }],
+      });
+      expect(result).toEqual({
+        $or: [{ title: { $like: "foo%" } }, { title: { $like: "bar%" } }],
+      });
+    });
+
+    it("should allow $prefix in $not", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "title", type: "string", prefix: true })
+        .build();
+
+      const result = schema.parse({
+        $not: { title: { $prefix: "excluded" } },
+      });
+      expect(result).toEqual({
+        $not: { title: { $like: "excluded%" } },
+      });
+    });
+
+    it("should not allow $prefix for non-prefix string fields", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "title", type: "string", prefix: true })
+        .addField({ field: "content", type: "string" })
+        .build();
+
+      // title has prefix: true, should allow $prefix
+      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(true);
+
+      // content does not have prefix: true, should not allow $prefix
+      expect(schema.safeParse({ content: { $prefix: "Hello" } }).success).toBe(false);
+    });
+
+    it("should not allow $prefix for number fields", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "id", type: "number" })
+        .build();
+
+      expect(schema.safeParse({ id: { $prefix: "123" } }).success).toBe(false);
+    });
+
+    it("should reject invalid value types for $prefix", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "title", type: "string", prefix: true })
+        .build();
+
+      // $prefix should only accept string values
+      expect(schema.safeParse({ title: { $prefix: 123 } }).success).toBe(false);
+      expect(schema.safeParse({ title: { $prefix: true } }).success).toBe(false);
+      expect(schema.safeParse({ title: { $prefix: ["array"] } }).success).toBe(false);
+      expect(schema.safeParse({ title: { $prefix: { nested: "object" } } }).success).toBe(false);
+    });
+
+    it("should allow combining $prefix with other operators", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "title", type: "string", prefix: true })
+        .build();
+
+      // Combining $prefix with $ne
+      expect(schema.safeParse({ title: { $prefix: "Hello", $ne: "excluded" } }).success).toBe(true);
+    });
+
+    it("should not allow $prefix in nested $and when field does not have prefix option", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "content", type: "string" })
+        .build();
+
+      expect(schema.safeParse({
+        $and: [{ content: { $prefix: "Hello" } }]
+      }).success).toBe(false);
+    });
+
+    it("should not allow $prefix in nested $or when field does not have prefix option", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "content", type: "string" })
+        .build();
+
+      expect(schema.safeParse({
+        $or: [{ content: { $prefix: "foo" } }, { content: { $prefix: "bar" } }]
+      }).success).toBe(false);
+    });
+
+    it("should not allow $prefix in $not when field does not have prefix option", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "content", type: "string" })
+        .build();
+
+      expect(schema.safeParse({
+        $not: { content: { $prefix: "excluded" } }
+      }).success).toBe(false);
+    });
+
+    it("should work with string replacement", () => {
+      interface Post {
+        author: { name: string };
+      }
+
+      const schema = new FilterQuerySchemaBuilder<Post>()
+        .addField({ field: "authorName", type: "string", prefix: true, replacement: "author.name" })
+        .build();
+
+      const result = schema.parse({ authorName: { $prefix: "John" } });
+      expect(result).toEqual({ author: { name: { $like: "John%" } } });
+    });
+
+    it("should allow both prefix and fulltext on same field", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "title", type: "string", prefix: true, fulltext: true })
+        .build();
+
+      // Both should be allowed
+      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(true);
+      expect(schema.safeParse({ title: { $fulltext: "search" } }).success).toBe(true);
+
+      // Transform $prefix
+      const result = schema.parse({ title: { $prefix: "Hello" } });
+      expect(result).toEqual({ title: { $like: "Hello%" } });
+    });
+
+    it("should handle direct string value for prefix field without transformation", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({ field: "title", type: "string", prefix: true })
+        .build();
+
+      // When a direct string value is passed (not an operator object),
+      // it should pass through without transformation
+      const result = schema.parse({ title: "Hello" });
+      expect(result).toEqual({ title: "Hello" });
+    });
+  });
 });

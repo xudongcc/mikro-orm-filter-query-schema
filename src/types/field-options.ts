@@ -32,6 +32,15 @@ export type BaseFieldOptions<Type extends FieldType = never> = {
        * Only available for string fields.
        */
       fulltext?: boolean;
+
+      /**
+       * Whether this field supports prefix search operator.
+       * When true, allows the `$prefix` operator to be used for this field.
+       * The `$prefix` operator is converted to `$like` with the value appended with '%'.
+       * Special characters (%, _) in the value are escaped.
+       * Only available for string fields.
+       */
+      prefix?: boolean;
     }
   : object);
 
