@@ -43,29 +43,61 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(schema.safeParse({ age: { $lte: 65 } }).success).toBe(true);
     });
 
+    it("should transform $between to $gte and $lte for number fields", () => {
+      const result = schema.parse({ age: { $between: [10, 20] } });
+
+      expect(result).toEqual({ age: { $gte: 10, $lte: 20 } });
+    });
+
+    it("should transform $between to $gte and $lte for date fields", () => {
+      const result = schema.parse({
+        createdAt: { $between: ["2024-01-01", "2024-12-31"] },
+      });
+
+      expect(result).toEqual({
+        createdAt: { $gte: "2024-01-01", $lte: "2024-12-31" },
+      });
+    });
+
     it("should validate array operators", () => {
       expect(schema.safeParse({ id: { $in: [1, 2, 3] } }).success).toBe(true);
       expect(schema.safeParse({ id: { $nin: [1, 2, 3] } }).success).toBe(true);
-      expect(schema.safeParse({ roles: { $contains: ["admin"] } }).success).toBe(true);
-      expect(schema.safeParse({ roles: { $overlap: ["admin", "user"] } }).success).toBe(true);
+      expect(
+        schema.safeParse({ roles: { $contains: ["admin"] } }).success,
+      ).toBe(true);
+      expect(
+        schema.safeParse({ roles: { $overlap: ["admin", "user"] } }).success,
+      ).toBe(true);
     });
 
     it("should reject unsupported operators", () => {
       // $like and $ilike are not supported
-      expect(schema.safeParse({ name: { $like: "%John%" } }).success).toBe(false);
-      expect(schema.safeParse({ name: { $ilike: "%john%" } }).success).toBe(false);
+      expect(schema.safeParse({ name: { $like: "%John%" } }).success).toBe(
+        false,
+      );
+      expect(schema.safeParse({ name: { $ilike: "%john%" } }).success).toBe(
+        false,
+      );
       expect(schema.safeParse({ name: { $regex: ".*" } }).success).toBe(false);
     });
 
     it("should allow $fulltext when fulltext: true is set", () => {
       // name has fulltext: true in createUserBuilder
-      expect(schema.safeParse({ name: { $fulltext: "search term" } }).success).toBe(true);
+      expect(
+        schema.safeParse({ name: { $fulltext: "search term" } }).success,
+      ).toBe(true);
     });
 
     it("should validate logical operators", () => {
-      expect(schema.safeParse({ $and: [{ name: "John" }, { age: 25 }] }).success).toBe(true);
-      expect(schema.safeParse({ $or: [{ name: "John" }, { name: "Jane" }] }).success).toBe(true);
-      expect(schema.safeParse({ $not: { isActive: false } }).success).toBe(true);
+      expect(
+        schema.safeParse({ $and: [{ name: "John" }, { age: 25 }] }).success,
+      ).toBe(true);
+      expect(
+        schema.safeParse({ $or: [{ name: "John" }, { name: "Jane" }] }).success,
+      ).toBe(true);
+      expect(schema.safeParse({ $not: { isActive: false } }).success).toBe(
+        true,
+      );
     });
 
     it("should validate nested logical operators", () => {
@@ -77,7 +109,6 @@ describe("FilterQuerySchemaBuilder", () => {
       };
       expect(schema.safeParse(query).success).toBe(true);
     });
-
   });
 
   describe("addField method", () => {
@@ -111,31 +142,41 @@ describe("FilterQuerySchemaBuilder", () => {
     it("should allow array length within limit", () => {
       const schema = createUserBuilder({ maxArrayLength: 5 }).build();
 
-      expect(schema.safeParse({ id: { $in: [1, 2, 3, 4, 5] } }).success).toBe(true);
+      expect(schema.safeParse({ id: { $in: [1, 2, 3, 4, 5] } }).success).toBe(
+        true,
+      );
     });
 
     it("should reject $in array exceeding limit", () => {
       const schema = createUserBuilder({ maxArrayLength: 3 }).build();
 
-      expect(schema.safeParse({ id: { $in: [1, 2, 3, 4] } }).success).toBe(false);
+      expect(schema.safeParse({ id: { $in: [1, 2, 3, 4] } }).success).toBe(
+        false,
+      );
     });
 
     it("should reject $nin array exceeding limit", () => {
       const schema = createUserBuilder({ maxArrayLength: 3 }).build();
 
-      expect(schema.safeParse({ id: { $nin: [1, 2, 3, 4] } }).success).toBe(false);
+      expect(schema.safeParse({ id: { $nin: [1, 2, 3, 4] } }).success).toBe(
+        false,
+      );
     });
 
     it("should reject $contains array exceeding limit", () => {
       const schema = createUserBuilder({ maxArrayLength: 2 }).build();
 
-      expect(schema.safeParse({ roles: { $contains: ["a", "b", "c"] } }).success).toBe(false);
+      expect(
+        schema.safeParse({ roles: { $contains: ["a", "b", "c"] } }).success,
+      ).toBe(false);
     });
 
     it("should reject $overlap array exceeding limit", () => {
       const schema = createUserBuilder({ maxArrayLength: 2 }).build();
 
-      expect(schema.safeParse({ roles: { $overlap: ["a", "b", "c"] } }).success).toBe(false);
+      expect(
+        schema.safeParse({ roles: { $overlap: ["a", "b", "c"] } }).success,
+      ).toBe(false);
     });
   });
 
@@ -146,7 +187,7 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(
         schema.safeParse({
           $or: [{ name: "A" }, { name: "B" }, { name: "C" }],
-        }).success
+        }).success,
       ).toBe(true);
     });
 
@@ -156,7 +197,7 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(
         schema.safeParse({
           $or: [{ name: "A" }, { name: "B" }, { name: "C" }],
-        }).success
+        }).success,
       ).toBe(false);
     });
 
@@ -166,7 +207,7 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(
         schema.safeParse({
           $and: [{ $or: [{ name: "A" }, { name: "B" }, { name: "C" }] }],
-        }).success
+        }).success,
       ).toBe(false);
     });
   });
@@ -180,7 +221,7 @@ describe("FilterQuerySchemaBuilder", () => {
           name: "John",
           age: 25,
           isActive: true,
-        }).success
+        }).success,
       ).toBe(true);
     });
 
@@ -192,7 +233,7 @@ describe("FilterQuerySchemaBuilder", () => {
           name: "John",
           age: 25,
           isActive: true,
-        }).success
+        }).success,
       ).toBe(false);
     });
 
@@ -204,7 +245,7 @@ describe("FilterQuerySchemaBuilder", () => {
           name: "John",
           age: 25,
           $and: [{ isActive: true }],
-        }).success
+        }).success,
       ).toBe(true);
     });
   });
@@ -216,7 +257,7 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(
         schema.safeParse({
           $and: [{ $or: [{ name: "John" }] }],
-        }).success
+        }).success,
       ).toBe(true);
     });
 
@@ -226,7 +267,7 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(
         schema.safeParse({
           $and: [{ $or: [{ $and: [{ name: "John" }] }] }],
-        }).success
+        }).success,
       ).toBe(false);
     });
 
@@ -243,7 +284,7 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(
         schema.safeParse({
           $and: [{ $or: [{ name: "John" }] }],
-        }).success
+        }).success,
       ).toBe(false);
     });
   });
@@ -256,15 +297,21 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(
         schema.safeParse({
           $and: [{ $or: [{ $and: [{ $or: [{ name: "John" }] }] }] }],
-        }).success
+        }).success,
       ).toBe(true);
     });
 
     it("default maxOrBranches is 5", () => {
       expect(
         schema.safeParse({
-          $or: [{ name: "A" }, { name: "B" }, { name: "C" }, { name: "D" }, { name: "E" }],
-        }).success
+          $or: [
+            { name: "A" },
+            { name: "B" },
+            { name: "C" },
+            { name: "D" },
+            { name: "E" },
+          ],
+        }).success,
       ).toBe(true);
 
       expect(
@@ -277,13 +324,15 @@ describe("FilterQuerySchemaBuilder", () => {
             { name: "E" },
             { name: "F" },
           ],
-        }).success
+        }).success,
       ).toBe(false);
     });
 
     it("default maxConditions is 20", () => {
       // Create a builder with many fields
-      const manyFieldsBuilder = new FilterQuerySchemaBuilder<Record<string, unknown>>();
+      const manyFieldsBuilder = new FilterQuerySchemaBuilder<
+        Record<string, unknown>
+      >();
       for (let i = 0; i < 21; i++) {
         manyFieldsBuilder.addField({ field: `field${i}`, type: "string" });
       }
@@ -322,21 +371,21 @@ describe("FilterQuerySchemaBuilder", () => {
         schema.safeParse({
           $or: [{ name: "A" }, { name: "B" }],
           id: { $in: [1, 2, 3] },
-        }).success
+        }).success,
       ).toBe(true);
 
       // Exceeds maxOrBranches
       expect(
         schema.safeParse({
           $or: [{ name: "A" }, { name: "B" }, { name: "C" }],
-        }).success
+        }).success,
       ).toBe(false);
 
       // Exceeds maxArrayLength
       expect(
         schema.safeParse({
           id: { $in: [1, 2, 3, 4, 5, 6] },
-        }).success
+        }).success,
       ).toBe(false);
     });
   });
@@ -346,7 +395,9 @@ describe("FilterQuerySchemaBuilder", () => {
 
     it("should reject invalid primitive value types", () => {
       // Objects are not valid primitive values (unless operator objects)
-      expect(schema.safeParse({ name: { invalid: "object" } }).success).toBe(false);
+      expect(schema.safeParse({ name: { invalid: "object" } }).success).toBe(
+        false,
+      );
       // Arrays are not valid primitive values (unless using operators)
       expect(schema.safeParse({ name: ["array"] }).success).toBe(false);
     });
@@ -357,11 +408,15 @@ describe("FilterQuerySchemaBuilder", () => {
       // $gt should be a number or string
       expect(schema.safeParse({ age: { $gt: null } }).success).toBe(false);
       // $in should be an array
-      expect(schema.safeParse({ id: { $in: "not-array" } }).success).toBe(false);
+      expect(schema.safeParse({ id: { $in: "not-array" } }).success).toBe(
+        false,
+      );
     });
 
     it("should reject unknown operators", () => {
-      expect(schema.safeParse({ name: { $unknown: "value" } }).success).toBe(false);
+      expect(schema.safeParse({ name: { $unknown: "value" } }).success).toBe(
+        false,
+      );
       expect(schema.safeParse({ age: { $regex: ".*" } }).success).toBe(false);
     });
 
@@ -383,21 +438,27 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(schema.safeParse({ age: "25" }).success).toBe(false);
       expect(schema.safeParse({ age: { $eq: "25" } }).success).toBe(false);
       expect(schema.safeParse({ age: { $gt: "18" } }).success).toBe(false);
-      expect(schema.safeParse({ age: { $in: ["25", "30"] } }).success).toBe(false);
+      expect(schema.safeParse({ age: { $in: ["25", "30"] } }).success).toBe(
+        false,
+      );
     });
 
     it("should reject number values for string fields", () => {
       // name is string type, should not accept numbers
       expect(schema.safeParse({ name: 123 }).success).toBe(false);
       expect(schema.safeParse({ name: { $eq: 123 } }).success).toBe(false);
-      expect(schema.safeParse({ name: { $in: [123, 456] } }).success).toBe(false);
+      expect(schema.safeParse({ name: { $in: [123, 456] } }).success).toBe(
+        false,
+      );
     });
 
     it("should reject non-boolean values for boolean fields", () => {
       // isActive is boolean type
       expect(schema.safeParse({ isActive: "true" }).success).toBe(false);
       expect(schema.safeParse({ isActive: 1 }).success).toBe(false);
-      expect(schema.safeParse({ isActive: { $eq: "true" } }).success).toBe(false);
+      expect(schema.safeParse({ isActive: { $eq: "true" } }).success).toBe(
+        false,
+      );
     });
 
     it("should accept values of correct types", () => {
@@ -410,12 +471,16 @@ describe("FilterQuerySchemaBuilder", () => {
       // String fields accept strings
       expect(schema.safeParse({ name: "John" }).success).toBe(true);
       expect(schema.safeParse({ name: { $eq: "John" } }).success).toBe(true);
-      expect(schema.safeParse({ name: { $in: ["John", "Jane"] } }).success).toBe(true);
+      expect(
+        schema.safeParse({ name: { $in: ["John", "Jane"] } }).success,
+      ).toBe(true);
 
       // Boolean fields accept booleans
       expect(schema.safeParse({ isActive: true }).success).toBe(true);
       expect(schema.safeParse({ isActive: { $eq: false } }).success).toBe(true);
-      expect(schema.safeParse({ isActive: { $in: [true, false] } }).success).toBe(true);
+      expect(
+        schema.safeParse({ isActive: { $in: [true, false] } }).success,
+      ).toBe(true);
     });
 
     it("should allow null values for any type", () => {
@@ -429,9 +494,16 @@ describe("FilterQuerySchemaBuilder", () => {
     it("should not support comparison operators for boolean type", () => {
       // boolean type does not support $gt, $gte, $lt, $lte
       expect(schema.safeParse({ isActive: { $gt: true } }).success).toBe(false);
-      expect(schema.safeParse({ isActive: { $gte: false } }).success).toBe(false);
+      expect(schema.safeParse({ isActive: { $gte: false } }).success).toBe(
+        false,
+      );
       expect(schema.safeParse({ isActive: { $lt: true } }).success).toBe(false);
-      expect(schema.safeParse({ isActive: { $lte: false } }).success).toBe(false);
+      expect(schema.safeParse({ isActive: { $lte: false } }).success).toBe(
+        false,
+      );
+      expect(
+        schema.safeParse({ isActive: { $between: [false, true] } }).success,
+      ).toBe(false);
     });
 
     it("should not support comparison operators for string fields", () => {
@@ -440,48 +512,88 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(schema.safeParse({ name: { $gte: "A" } }).success).toBe(false);
       expect(schema.safeParse({ name: { $lt: "Z" } }).success).toBe(false);
       expect(schema.safeParse({ name: { $lte: "Z" } }).success).toBe(false);
+      expect(schema.safeParse({ name: { $between: ["A", "Z"] } }).success).toBe(
+        false,
+      );
     });
 
     it("should not support array operators for non-array fields", () => {
       // name is not an array field, does not support $contains, $overlap
-      expect(schema.safeParse({ name: { $contains: ["John"] } }).success).toBe(false);
-      expect(schema.safeParse({ name: { $overlap: ["John", "Jane"] } }).success).toBe(false);
+      expect(schema.safeParse({ name: { $contains: ["John"] } }).success).toBe(
+        false,
+      );
+      expect(
+        schema.safeParse({ name: { $overlap: ["John", "Jane"] } }).success,
+      ).toBe(false);
     });
 
     it("should support array operators for array fields", () => {
       // roles is an array field, supports $contains, $overlap
-      expect(schema.safeParse({ roles: { $contains: ["admin"] } }).success).toBe(true);
-      expect(schema.safeParse({ roles: { $overlap: ["admin", "user"] } }).success).toBe(true);
+      expect(
+        schema.safeParse({ roles: { $contains: ["admin"] } }).success,
+      ).toBe(true);
+      expect(
+        schema.safeParse({ roles: { $overlap: ["admin", "user"] } }).success,
+      ).toBe(true);
     });
 
     it("should allow $fulltext for fields with fulltext: true", () => {
       // name has fulltext: true in createUserBuilder, so $fulltext should be allowed
-      expect(schema.safeParse({ name: { $fulltext: "search" } }).success).toBe(true);
+      expect(schema.safeParse({ name: { $fulltext: "search" } }).success).toBe(
+        true,
+      );
     });
 
     it("should not allow $fulltext for non-string fields", () => {
       // $fulltext is not valid for non-string fields like number
-      expect(schema.safeParse({ age: { $fulltext: "search" } }).success).toBe(false);
+      expect(schema.safeParse({ age: { $fulltext: "search" } }).success).toBe(
+        false,
+      );
     });
 
     it("should accept ISO date strings for date fields", () => {
       // Full ISO format with timezone
-      expect(schema.safeParse({ createdAt: "2024-01-15T10:30:00Z" }).success).toBe(true);
-      expect(schema.safeParse({ createdAt: { $eq: "2024-01-15T10:30:00Z" } }).success).toBe(true);
-      expect(schema.safeParse({ createdAt: { $gt: "2024-01-01T00:00:00Z" } }).success).toBe(true);
-      expect(schema.safeParse({ createdAt: { $gte: "2024-01-01T00:00:00Z" } }).success).toBe(true);
-      expect(schema.safeParse({ createdAt: { $lt: "2024-12-31T23:59:59Z" } }).success).toBe(true);
-      expect(schema.safeParse({ createdAt: { $lte: "2024-12-31T23:59:59Z" } }).success).toBe(true);
+      expect(
+        schema.safeParse({ createdAt: "2024-01-15T10:30:00Z" }).success,
+      ).toBe(true);
+      expect(
+        schema.safeParse({ createdAt: { $eq: "2024-01-15T10:30:00Z" } })
+          .success,
+      ).toBe(true);
+      expect(
+        schema.safeParse({ createdAt: { $gt: "2024-01-01T00:00:00Z" } })
+          .success,
+      ).toBe(true);
+      expect(
+        schema.safeParse({ createdAt: { $gte: "2024-01-01T00:00:00Z" } })
+          .success,
+      ).toBe(true);
+      expect(
+        schema.safeParse({ createdAt: { $lt: "2024-12-31T23:59:59Z" } })
+          .success,
+      ).toBe(true);
+      expect(
+        schema.safeParse({ createdAt: { $lte: "2024-12-31T23:59:59Z" } })
+          .success,
+      ).toBe(true);
 
       // ISO format with timezone offset
-      expect(schema.safeParse({ createdAt: "2024-01-15T10:30:00+08:00" }).success).toBe(true);
-      expect(schema.safeParse({ createdAt: "2024-01-15T10:30:00-05:00" }).success).toBe(true);
+      expect(
+        schema.safeParse({ createdAt: "2024-01-15T10:30:00+08:00" }).success,
+      ).toBe(true);
+      expect(
+        schema.safeParse({ createdAt: "2024-01-15T10:30:00-05:00" }).success,
+      ).toBe(true);
 
       // ISO format with milliseconds
-      expect(schema.safeParse({ createdAt: "2024-01-15T10:30:00.123Z" }).success).toBe(true);
+      expect(
+        schema.safeParse({ createdAt: "2024-01-15T10:30:00.123Z" }).success,
+      ).toBe(true);
 
       // ISO format without timezone (local time)
-      expect(schema.safeParse({ createdAt: "2024-01-15T10:30:00" }).success).toBe(true);
+      expect(
+        schema.safeParse({ createdAt: "2024-01-15T10:30:00" }).success,
+      ).toBe(true);
 
       // Date only format
       expect(schema.safeParse({ createdAt: "2024-01-15" }).success).toBe(true);
@@ -508,7 +620,7 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(
         schema.safeParse({
           $and: [{ unknownField: "value" }],
-        }).success
+        }).success,
       ).toBe(false);
     });
 
@@ -516,7 +628,7 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(
         schema.safeParse({
           $or: [{ name: "John" }, { unknownField: "value" }],
-        }).success
+        }).success,
       ).toBe(false);
     });
 
@@ -524,7 +636,7 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(
         schema.safeParse({
           $not: { unknownField: "value" },
-        }).success
+        }).success,
       ).toBe(false);
     });
 
@@ -533,12 +645,10 @@ describe("FilterQuerySchemaBuilder", () => {
         schema.safeParse({
           $and: [
             {
-              $or: [
-                { name: { $unknown: "value" } },
-              ],
+              $or: [{ name: { $unknown: "value" } }],
             },
           ],
-        }).success
+        }).success,
       ).toBe(false);
     });
   });
@@ -564,8 +674,45 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(
         schema.safeParse({
           age: { $gte: 18, $lte: 65 },
-        }).success
+        }).success,
       ).toBe(true);
+    });
+
+    it("should reject invalid $between values", () => {
+      const schema = createUserBuilder().build();
+
+      expect(schema.safeParse({ age: { $between: [10] } }).success).toBe(false);
+      expect(
+        schema.safeParse({ age: { $between: [10, 20, 30] } }).success,
+      ).toBe(false);
+      expect(
+        schema.safeParse({ age: { $between: ["10", "20"] } }).success,
+      ).toBe(false);
+    });
+
+    it("should reject mixing $between with range operators", () => {
+      const schema = createUserBuilder().build();
+
+      expect(
+        schema.safeParse({ age: { $between: [10, 20], $gt: 12 } }).success,
+      ).toBe(false);
+      expect(
+        schema.safeParse({ age: { $between: [10, 20], $gte: 12 } }).success,
+      ).toBe(false);
+      expect(
+        schema.safeParse({ age: { $between: [10, 20], $lt: 18 } }).success,
+      ).toBe(false);
+      expect(
+        schema.safeParse({ age: { $between: [10, 20], $lte: 18 } }).success,
+      ).toBe(false);
+    });
+
+    it("should allow combining $between with non-range operators", () => {
+      const schema = createUserBuilder().build();
+
+      const result = schema.parse({ age: { $between: [10, 20], $ne: 15 } });
+
+      expect(result).toEqual({ age: { $gte: 10, $lte: 20, $ne: 15 } });
     });
 
     it("should allow using field conditions and logical operators together", () => {
@@ -575,7 +722,7 @@ describe("FilterQuerySchemaBuilder", () => {
           name: "John",
           $and: [{ age: { $gte: 18 } }],
           $or: [{ isActive: true }],
-        }).success
+        }).success,
       ).toBe(true);
     });
 
@@ -607,7 +754,11 @@ describe("FilterQuerySchemaBuilder", () => {
       const schema = new FilterQuerySchemaBuilder<Post>()
         .addField({ field: "id", type: "number" })
         .addField({ field: "title", type: "string" })
-        .addField({ field: "authorName", type: "string", replacement: "author.name" })
+        .addField({
+          field: "authorName",
+          type: "string",
+          replacement: "author.name",
+        })
         .build();
 
       const result = schema.parse({ authorName: "John" });
@@ -616,17 +767,39 @@ describe("FilterQuerySchemaBuilder", () => {
 
     it("should replace field name in comparison operators", () => {
       const schema = new FilterQuerySchemaBuilder<Post>()
-        .addField({ field: "authorAge", type: "number", replacement: "author.age" })
+        .addField({
+          field: "authorAge",
+          type: "number",
+          replacement: "author.age",
+        })
         .build();
 
       const result = schema.parse({ authorAge: { $gte: 18 } });
       expect(result).toEqual({ author: { age: { $gte: 18 } } });
     });
 
+    it("should replace field name after transforming $between", () => {
+      const schema = new FilterQuerySchemaBuilder<Post>()
+        .addField({
+          field: "authorAge",
+          type: "number",
+          replacement: "author.age",
+        })
+        .build();
+
+      const result = schema.parse({ authorAge: { $between: [18, 65] } });
+
+      expect(result).toEqual({ author: { age: { $gte: 18, $lte: 65 } } });
+    });
+
     it("should recursively replace field names in $and", () => {
       const schema = new FilterQuerySchemaBuilder<Post>()
         .addField({ field: "title", type: "string" })
-        .addField({ field: "authorName", type: "string", replacement: "author.name" })
+        .addField({
+          field: "authorName",
+          type: "string",
+          replacement: "author.name",
+        })
         .build();
 
       const result = schema.parse({
@@ -639,7 +812,11 @@ describe("FilterQuerySchemaBuilder", () => {
 
     it("should recursively replace field names in $or", () => {
       const schema = new FilterQuerySchemaBuilder<Post>()
-        .addField({ field: "authorName", type: "string", replacement: "author.name" })
+        .addField({
+          field: "authorName",
+          type: "string",
+          replacement: "author.name",
+        })
         .build();
 
       const result = schema.parse({
@@ -652,7 +829,11 @@ describe("FilterQuerySchemaBuilder", () => {
 
     it("should recursively replace field names in $not", () => {
       const schema = new FilterQuerySchemaBuilder<Post>()
-        .addField({ field: "authorName", type: "string", replacement: "author.name" })
+        .addField({
+          field: "authorName",
+          type: "string",
+          replacement: "author.name",
+        })
         .build();
 
       const result = schema.parse({
@@ -665,8 +846,16 @@ describe("FilterQuerySchemaBuilder", () => {
 
     it("should replace field names in deeply nested structures", () => {
       const schema = new FilterQuerySchemaBuilder<Post>()
-        .addField({ field: "authorName", type: "string", replacement: "author.name" })
-        .addField({ field: "authorAge", type: "number", replacement: "author.age" })
+        .addField({
+          field: "authorName",
+          type: "string",
+          replacement: "author.name",
+        })
+        .addField({
+          field: "authorAge",
+          type: "number",
+          replacement: "author.age",
+        })
         .build();
 
       const result = schema.parse({
@@ -691,7 +880,11 @@ describe("FilterQuerySchemaBuilder", () => {
       const schema = new FilterQuerySchemaBuilder<Post>()
         .addField({ field: "id", type: "number" })
         .addField({ field: "title", type: "string" })
-        .addField({ field: "authorName", type: "string", replacement: "author.name" })
+        .addField({
+          field: "authorName",
+          type: "string",
+          replacement: "author.name",
+        })
         .build();
 
       const result = schema.parse({
@@ -879,10 +1072,7 @@ describe("FilterQuerySchemaBuilder", () => {
 
       const result = schema.parse({ tagSearch: { $in: ["a", "b"] } });
       expect(result).toEqual({
-        $or: [
-          { tags: { $contains: ["a"] } },
-          { tags: { $contains: ["b"] } },
-        ],
+        $or: [{ tags: { $contains: ["a"] } }, { tags: { $contains: ["b"] } }],
       });
     });
   });
@@ -901,7 +1091,9 @@ describe("FilterQuerySchemaBuilder", () => {
         .addField({ field: "title", type: "string", fulltext: true })
         .build();
 
-      expect(schema.safeParse({ title: { $fulltext: "search term" } }).success).toBe(true);
+      expect(
+        schema.safeParse({ title: { $fulltext: "search term" } }).success,
+      ).toBe(true);
       const result = schema.parse({ title: { $fulltext: "search term" } });
       expect(result).toEqual({ title: { $fulltext: "search term" } });
     });
@@ -942,7 +1134,9 @@ describe("FilterQuerySchemaBuilder", () => {
         .addField({ field: "title", type: "string" })
         .build();
 
-      expect(schema.safeParse({ title: { $fulltext: "search term" } }).success).toBe(false);
+      expect(
+        schema.safeParse({ title: { $fulltext: "search term" } }).success,
+      ).toBe(false);
     });
 
     it("should allow both $fulltext and other operators for fulltext fields", () => {
@@ -951,12 +1145,18 @@ describe("FilterQuerySchemaBuilder", () => {
         .build();
 
       // $fulltext should work
-      expect(schema.safeParse({ title: { $fulltext: "search" } }).success).toBe(true);
+      expect(schema.safeParse({ title: { $fulltext: "search" } }).success).toBe(
+        true,
+      );
 
       // Other operators should also work
       expect(schema.safeParse({ title: { $eq: "exact" } }).success).toBe(true);
-      expect(schema.safeParse({ title: { $ne: "excluded" } }).success).toBe(true);
-      expect(schema.safeParse({ title: { $in: ["a", "b"] } }).success).toBe(true);
+      expect(schema.safeParse({ title: { $ne: "excluded" } }).success).toBe(
+        true,
+      );
+      expect(schema.safeParse({ title: { $in: ["a", "b"] } }).success).toBe(
+        true,
+      );
     });
 
     it("should allow $fulltext in $and", () => {
@@ -1006,10 +1206,14 @@ describe("FilterQuerySchemaBuilder", () => {
         .build();
 
       // title has fulltext: true, should allow $fulltext
-      expect(schema.safeParse({ title: { $fulltext: "search" } }).success).toBe(true);
+      expect(schema.safeParse({ title: { $fulltext: "search" } }).success).toBe(
+        true,
+      );
 
       // content does not have fulltext: true, should not allow $fulltext
-      expect(schema.safeParse({ content: { $fulltext: "search" } }).success).toBe(false);
+      expect(
+        schema.safeParse({ content: { $fulltext: "search" } }).success,
+      ).toBe(false);
     });
 
     it("should not allow $fulltext for number fields", () => {
@@ -1017,7 +1221,9 @@ describe("FilterQuerySchemaBuilder", () => {
         .addField({ field: "id", type: "number" })
         .build();
 
-      expect(schema.safeParse({ id: { $fulltext: "search" } }).success).toBe(false);
+      expect(schema.safeParse({ id: { $fulltext: "search" } }).success).toBe(
+        false,
+      );
     });
 
     it("should reject invalid value types for $fulltext", () => {
@@ -1026,10 +1232,19 @@ describe("FilterQuerySchemaBuilder", () => {
         .build();
 
       // $fulltext should only accept string values
-      expect(schema.safeParse({ title: { $fulltext: 123 } }).success).toBe(false);
-      expect(schema.safeParse({ title: { $fulltext: true } }).success).toBe(false);
-      expect(schema.safeParse({ title: { $fulltext: ["array"] } }).success).toBe(false);
-      expect(schema.safeParse({ title: { $fulltext: { nested: "object" } } }).success).toBe(false);
+      expect(schema.safeParse({ title: { $fulltext: 123 } }).success).toBe(
+        false,
+      );
+      expect(schema.safeParse({ title: { $fulltext: true } }).success).toBe(
+        false,
+      );
+      expect(
+        schema.safeParse({ title: { $fulltext: ["array"] } }).success,
+      ).toBe(false);
+      expect(
+        schema.safeParse({ title: { $fulltext: { nested: "object" } } })
+          .success,
+      ).toBe(false);
     });
 
     it("should allow combining $fulltext with other operators", () => {
@@ -1038,7 +1253,10 @@ describe("FilterQuerySchemaBuilder", () => {
         .build();
 
       // Can use multiple operators on the same field
-      expect(schema.safeParse({ title: { $fulltext: "search", $ne: "excluded" } }).success).toBe(true);
+      expect(
+        schema.safeParse({ title: { $fulltext: "search", $ne: "excluded" } })
+          .success,
+      ).toBe(true);
     });
 
     it("should not allow $fulltext in nested $and when field does not have fulltext option", () => {
@@ -1047,9 +1265,11 @@ describe("FilterQuerySchemaBuilder", () => {
         .addField({ field: "content", type: "string" })
         .build();
 
-      expect(schema.safeParse({
-        $and: [{ content: { $fulltext: "search" } }]
-      }).success).toBe(false);
+      expect(
+        schema.safeParse({
+          $and: [{ content: { $fulltext: "search" } }],
+        }).success,
+      ).toBe(false);
     });
 
     it("should not allow $fulltext in nested $or when field does not have fulltext option", () => {
@@ -1057,9 +1277,14 @@ describe("FilterQuerySchemaBuilder", () => {
         .addField({ field: "content", type: "string" })
         .build();
 
-      expect(schema.safeParse({
-        $or: [{ content: { $fulltext: "foo" } }, { content: { $fulltext: "bar" } }]
-      }).success).toBe(false);
+      expect(
+        schema.safeParse({
+          $or: [
+            { content: { $fulltext: "foo" } },
+            { content: { $fulltext: "bar" } },
+          ],
+        }).success,
+      ).toBe(false);
     });
 
     it("should not allow $fulltext in $not when field does not have fulltext option", () => {
@@ -1067,9 +1292,11 @@ describe("FilterQuerySchemaBuilder", () => {
         .addField({ field: "content", type: "string" })
         .build();
 
-      expect(schema.safeParse({
-        $not: { content: { $fulltext: "excluded" } }
-      }).success).toBe(false);
+      expect(
+        schema.safeParse({
+          $not: { content: { $fulltext: "excluded" } },
+        }).success,
+      ).toBe(false);
     });
   });
 
@@ -1086,7 +1313,9 @@ describe("FilterQuerySchemaBuilder", () => {
         .addField({ field: "title", type: "string", prefix: true })
         .build();
 
-      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(true);
+      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(
+        true,
+      );
     });
 
     it("should transform $prefix to $like with % suffix", () => {
@@ -1125,7 +1354,9 @@ describe("FilterQuerySchemaBuilder", () => {
         .addField({ field: "title", type: "string" })
         .build();
 
-      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(false);
+      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(
+        false,
+      );
     });
 
     it("should allow both $prefix and other operators for prefix fields", () => {
@@ -1134,12 +1365,16 @@ describe("FilterQuerySchemaBuilder", () => {
         .build();
 
       // $prefix should work
-      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(true);
+      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(
+        true,
+      );
 
       // Other operators should still work
       expect(schema.safeParse({ title: { $eq: "Hello" } }).success).toBe(true);
       expect(schema.safeParse({ title: { $ne: "Hello" } }).success).toBe(true);
-      expect(schema.safeParse({ title: { $in: ["Hello", "World"] } }).success).toBe(true);
+      expect(
+        schema.safeParse({ title: { $in: ["Hello", "World"] } }).success,
+      ).toBe(true);
     });
 
     it("should allow $prefix in $and", () => {
@@ -1189,10 +1424,14 @@ describe("FilterQuerySchemaBuilder", () => {
         .build();
 
       // title has prefix: true, should allow $prefix
-      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(true);
+      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(
+        true,
+      );
 
       // content does not have prefix: true, should not allow $prefix
-      expect(schema.safeParse({ content: { $prefix: "Hello" } }).success).toBe(false);
+      expect(schema.safeParse({ content: { $prefix: "Hello" } }).success).toBe(
+        false,
+      );
     });
 
     it("should not allow $prefix for number fields", () => {
@@ -1210,9 +1449,15 @@ describe("FilterQuerySchemaBuilder", () => {
 
       // $prefix should only accept string values
       expect(schema.safeParse({ title: { $prefix: 123 } }).success).toBe(false);
-      expect(schema.safeParse({ title: { $prefix: true } }).success).toBe(false);
-      expect(schema.safeParse({ title: { $prefix: ["array"] } }).success).toBe(false);
-      expect(schema.safeParse({ title: { $prefix: { nested: "object" } } }).success).toBe(false);
+      expect(schema.safeParse({ title: { $prefix: true } }).success).toBe(
+        false,
+      );
+      expect(schema.safeParse({ title: { $prefix: ["array"] } }).success).toBe(
+        false,
+      );
+      expect(
+        schema.safeParse({ title: { $prefix: { nested: "object" } } }).success,
+      ).toBe(false);
     });
 
     it("should allow combining $prefix with other operators", () => {
@@ -1221,7 +1466,10 @@ describe("FilterQuerySchemaBuilder", () => {
         .build();
 
       // Combining $prefix with $ne
-      expect(schema.safeParse({ title: { $prefix: "Hello", $ne: "excluded" } }).success).toBe(true);
+      expect(
+        schema.safeParse({ title: { $prefix: "Hello", $ne: "excluded" } })
+          .success,
+      ).toBe(true);
     });
 
     it("should not allow $prefix in nested $and when field does not have prefix option", () => {
@@ -1229,9 +1477,11 @@ describe("FilterQuerySchemaBuilder", () => {
         .addField({ field: "content", type: "string" })
         .build();
 
-      expect(schema.safeParse({
-        $and: [{ content: { $prefix: "Hello" } }]
-      }).success).toBe(false);
+      expect(
+        schema.safeParse({
+          $and: [{ content: { $prefix: "Hello" } }],
+        }).success,
+      ).toBe(false);
     });
 
     it("should not allow $prefix in nested $or when field does not have prefix option", () => {
@@ -1239,9 +1489,14 @@ describe("FilterQuerySchemaBuilder", () => {
         .addField({ field: "content", type: "string" })
         .build();
 
-      expect(schema.safeParse({
-        $or: [{ content: { $prefix: "foo" } }, { content: { $prefix: "bar" } }]
-      }).success).toBe(false);
+      expect(
+        schema.safeParse({
+          $or: [
+            { content: { $prefix: "foo" } },
+            { content: { $prefix: "bar" } },
+          ],
+        }).success,
+      ).toBe(false);
     });
 
     it("should not allow $prefix in $not when field does not have prefix option", () => {
@@ -1249,9 +1504,11 @@ describe("FilterQuerySchemaBuilder", () => {
         .addField({ field: "content", type: "string" })
         .build();
 
-      expect(schema.safeParse({
-        $not: { content: { $prefix: "excluded" } }
-      }).success).toBe(false);
+      expect(
+        schema.safeParse({
+          $not: { content: { $prefix: "excluded" } },
+        }).success,
+      ).toBe(false);
     });
 
     it("should work with string replacement", () => {
@@ -1260,7 +1517,12 @@ describe("FilterQuerySchemaBuilder", () => {
       }
 
       const schema = new FilterQuerySchemaBuilder<Post>()
-        .addField({ field: "authorName", type: "string", prefix: true, replacement: "author.name" })
+        .addField({
+          field: "authorName",
+          type: "string",
+          prefix: true,
+          replacement: "author.name",
+        })
         .build();
 
       const result = schema.parse({ authorName: { $prefix: "John" } });
@@ -1269,12 +1531,21 @@ describe("FilterQuerySchemaBuilder", () => {
 
     it("should allow both prefix and fulltext on same field", () => {
       const schema = new FilterQuerySchemaBuilder<Article>()
-        .addField({ field: "title", type: "string", prefix: true, fulltext: true })
+        .addField({
+          field: "title",
+          type: "string",
+          prefix: true,
+          fulltext: true,
+        })
         .build();
 
       // Both should be allowed
-      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(true);
-      expect(schema.safeParse({ title: { $fulltext: "search" } }).success).toBe(true);
+      expect(schema.safeParse({ title: { $prefix: "Hello" } }).success).toBe(
+        true,
+      );
+      expect(schema.safeParse({ title: { $fulltext: "search" } }).success).toBe(
+        true,
+      );
 
       // Transform $prefix
       const result = schema.parse({ title: { $prefix: "Hello" } });

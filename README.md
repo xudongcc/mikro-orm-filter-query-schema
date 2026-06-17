@@ -17,6 +17,7 @@ yarn add mikro-orm-filter-query-schema
 - Build type-safe Zod schemas for MikroORM `FilterQuery`
 - Configurable security limits to prevent DoS attacks
 - Support for all MikroORM comparison operators
+- Inclusive `$between` range shorthand for number and date fields
 - Field whitelist validation
 - Nested logical operators (`$and`, `$or`, `$not`)
 - Field name replacement (string path or callback function)
@@ -131,6 +132,7 @@ const schema = new FilterQuerySchemaBuilder<Article>()
 ```
 
 The callback receives an object with:
+
 - `field`: The original field name
 - `operator`: The operator being used (`$eq`, `$ne`, `$in`, `$fulltext`, etc.)
 - `value`: The value associated with the operator
@@ -139,55 +141,58 @@ The callback receives an object with:
 
 ### Equality Operators (all types)
 
-| Operator | Description | Example |
-|----------|-------------|---------|
-| `$eq` | Equal | `{ age: { $eq: 25 } }` |
-| `$ne` | Not equal | `{ age: { $ne: 25 } }` |
-| `$in` | In array | `{ id: { $in: [1, 2, 3] } }` |
-| `$nin` | Not in array | `{ id: { $nin: [1, 2, 3] } }` |
+| Operator | Description  | Example                       |
+| -------- | ------------ | ----------------------------- |
+| `$eq`    | Equal        | `{ age: { $eq: 25 } }`        |
+| `$ne`    | Not equal    | `{ age: { $ne: 25 } }`        |
+| `$in`    | In array     | `{ id: { $in: [1, 2, 3] } }`  |
+| `$nin`   | Not in array | `{ id: { $nin: [1, 2, 3] } }` |
 
 ### Comparison Operators (number, date only)
 
-| Operator | Description | Example |
-|----------|-------------|---------|
-| `$gt` | Greater than | `{ age: { $gt: 18 } }` |
-| `$gte` | Greater than or equal | `{ age: { $gte: 18 } }` |
-| `$lt` | Less than | `{ age: { $lt: 65 } }` |
-| `$lte` | Less than or equal | `{ age: { $lte: 65 } }` |
+| Operator   | Description                                 | Example                                                               |
+| ---------- | ------------------------------------------- | --------------------------------------------------------------------- |
+| `$gt`      | Greater than                                | `{ age: { $gt: 18 } }`                                                |
+| `$gte`     | Greater than or equal                       | `{ age: { $gte: 18 } }`                                               |
+| `$lt`      | Less than                                   | `{ age: { $lt: 65 } }`                                                |
+| `$lte`     | Less than or equal                          | `{ age: { $lte: 65 } }`                                               |
+| `$between` | Inclusive range, converted to `$gte`/`$lte` | `{ age: { $between: [18, 65] } }` → `{ age: { $gte: 18, $lte: 65 } }` |
+
+`$between` accepts exactly two values and is only available for number and date fields. It cannot be combined with `$gt`, `$gte`, `$lt`, or `$lte` on the same field.
 
 ### Array Operators
 
-| Operator | Description | Example |
-|----------|-------------|---------|
-| `$contains` | Array contains all | `{ roles: { $contains: ["admin"] } }` |
-| `$overlap` | Array overlaps | `{ roles: { $overlap: ["admin", "user"] } }` |
+| Operator    | Description        | Example                                      |
+| ----------- | ------------------ | -------------------------------------------- |
+| `$contains` | Array contains all | `{ roles: { $contains: ["admin"] } }`        |
+| `$overlap`  | Array overlaps     | `{ roles: { $overlap: ["admin", "user"] } }` |
 
 ### Logical Operators
 
-| Operator | Description | Example |
-|----------|-------------|---------|
-| `$and` | Logical AND | `{ $and: [{ age: { $gte: 18 } }, { isActive: true }] }` |
-| `$or` | Logical OR | `{ $or: [{ name: "John" }, { name: "Jane" }] }` |
-| `$not` | Logical NOT | `{ $not: { isActive: false } }` |
+| Operator | Description | Example                                                 |
+| -------- | ----------- | ------------------------------------------------------- |
+| `$and`   | Logical AND | `{ $and: [{ age: { $gte: 18 } }, { isActive: true }] }` |
+| `$or`    | Logical OR  | `{ $or: [{ name: "John" }, { name: "Jane" }] }`         |
+| `$not`   | Logical NOT | `{ $not: { isActive: false } }`                         |
 
 ## Configuration Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `maxDepth` | `number` | `5` | Maximum nesting depth for filter queries |
-| `maxConditions` | `number` | `20` | Maximum number of field conditions in a filter |
-| `maxOrBranches` | `number` | `5` | Maximum number of branches in `$or` operator |
-| `maxArrayLength` | `number` | `100` | Maximum array length for `$in`/`$nin`/`$contains`/`$overlap` |
+| Option           | Type     | Default | Description                                                  |
+| ---------------- | -------- | ------- | ------------------------------------------------------------ |
+| `maxDepth`       | `number` | `5`     | Maximum nesting depth for filter queries                     |
+| `maxConditions`  | `number` | `20`    | Maximum number of field conditions in a filter               |
+| `maxOrBranches`  | `number` | `5`     | Maximum number of branches in `$or` operator                 |
+| `maxArrayLength` | `number` | `100`   | Maximum array length for `$in`/`$nin`/`$contains`/`$overlap` |
 
 ## Field Options
 
 ```typescript
 interface FieldOptions {
-  field: string;           // Field name
+  field: string; // Field name
   type: "string" | "number" | "boolean" | "date";
-  array?: boolean;         // Is array field (enables $contains, $overlap)
+  array?: boolean; // Is array field (enables $contains, $overlap)
   fulltext?: boolean | string; // Enable $fulltext or map it to a field path
-  prefix?: boolean;        // Enable $prefix operator (string fields only)
+  prefix?: boolean; // Enable $prefix operator (string fields only)
   replacement?: string | ((args: ReplacementCallbackArgs) => FilterQuery);
 }
 ```
@@ -236,8 +241,8 @@ schema.parse({ title: { $eq: "exact title", $fulltext: "search term" } });
 
 ### Fulltext Search Operator
 
-| Operator | Description | Example |
-|----------|-------------|---------|
+| Operator    | Description      | Example                                   |
+| ----------- | ---------------- | ----------------------------------------- |
 | `$fulltext` | Full-text search | `{ title: { $fulltext: "search term" } }` |
 
 > Note: The `$fulltext` operator is only available for string fields with `fulltext: true` or a fulltext field path.
@@ -266,8 +271,8 @@ schema.safeParse({ content: { $prefix: "Hello" } }).success; // false
 
 ### Prefix Search Operator
 
-| Operator | Description | Example |
-|----------|-------------|---------|
+| Operator  | Description                        | Example                                                              |
+| --------- | ---------------------------------- | -------------------------------------------------------------------- |
 | `$prefix` | Prefix search (converted to $like) | `{ title: { $prefix: "Hello" } }` → `{ title: { $like: "Hello%" } }` |
 
 > Note: The `$prefix` operator is only available for string fields with `prefix: true` option.

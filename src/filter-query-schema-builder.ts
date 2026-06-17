@@ -16,7 +16,7 @@ import { setNestedValue } from "./utils/index.js";
  * @internal
  */
 function hasStringReplacement<Entity extends object>(
-  options: FieldOptions<Entity, FieldType, string>
+  options: FieldOptions<Entity, FieldType, string>,
 ): options is ReplacementFieldOptions<Entity, FieldType, string> {
   return "replacement" in options && typeof options.replacement === "string";
 }
@@ -26,7 +26,7 @@ function hasStringReplacement<Entity extends object>(
  * @internal
  */
 function hasCallbackReplacement<Entity extends object>(
-  options: FieldOptions<Entity, FieldType, string>
+  options: FieldOptions<Entity, FieldType, string>,
 ): options is ReplacementCallbackFieldOptions<Entity, FieldType> {
   return "replacement" in options && typeof options.replacement === "function";
 }
@@ -43,6 +43,7 @@ function isOperator(key: string): key is Operator {
     "$gt",
     "$lte",
     "$gte",
+    "$between",
     "$in",
     "$nin",
     "$fulltext",
@@ -89,10 +90,11 @@ function getValueSchema(type: FieldType): z.ZodTypeAny {
 function createTypedComparisonSchema(
   type: FieldType,
   maxArrayLength: number,
-  options?: { array?: boolean; fulltext?: boolean | string; prefix?: boolean }
+  options?: { array?: boolean; fulltext?: boolean | string; prefix?: boolean },
 ): z.ZodTypeAny {
   const valueSchema = getValueSchema(type);
   const valueWithNull = z.union([valueSchema, z.null()]);
+  const rangeOperators = ["$gt", "$gte", "$lt", "$lte"];
 
   const comparisonFields: Record<string, z.ZodTypeAny> = {
     $eq: valueWithNull.optional(),
@@ -105,6 +107,7 @@ function createTypedComparisonSchema(
     comparisonFields.$gte = valueSchema.optional();
     comparisonFields.$lt = valueSchema.optional();
     comparisonFields.$lte = valueSchema.optional();
+    comparisonFields.$between = z.tuple([valueSchema, valueSchema]).optional();
   }
 
   // $in and $nin apply to all types
@@ -133,7 +136,21 @@ function createTypedComparisonSchema(
     comparisonFields.$prefix = valueSchema.optional();
   }
 
-  const comparisonObjectSchema = z.object(comparisonFields).strict();
+  const comparisonObjectSchema = z
+    .object(comparisonFields)
+    .strict()
+    .superRefine((obj, ctx) => {
+      if (
+        "$between" in obj &&
+        rangeOperators.some((operator) => operator in obj)
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "$between cannot be combined with range operators",
+          path: ["$between"],
+        });
+      }
+    });
 
   // Support direct assignment, null value, or comparison object
   return z.union([valueSchema, z.null(), comparisonObjectSchema]);
@@ -223,7 +240,7 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
   >(options: FieldOptions<Entity, Type, Field>): this {
     this.fieldOptionsMap.set(
       options.field,
-      options as unknown as FieldOptions<Entity, FieldType, string>
+      options as unknown as FieldOptions<Entity, FieldType, string>,
     );
     return this;
   }
@@ -280,7 +297,7 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
             field: string;
             operator: Operator;
             value: unknown;
-          }) => FilterQuery<Entity>
+          }) => FilterQuery<Entity>,
         );
       }
 
@@ -297,15 +314,24 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
       }
     }
 
+    // Build between field set
+    const betweenFieldSet = new Set<string>();
+    for (const field of fieldOptions) {
+      if (field.type === "number" || field.type === "date") {
+        betweenFieldSet.add(field.field);
+      }
+    }
+
     const hasTransforms =
       stringReplacementMap.size > 0 ||
       callbackReplacementMap.size > 0 ||
       fulltextReplacementMap.size > 0 ||
-      prefixFieldSet.size > 0;
+      prefixFieldSet.size > 0 ||
+      betweenFieldSet.size > 0;
 
     // Parse field value to extract operator and value pairs
     const parseFieldValue = (
-      fieldValue: unknown
+      fieldValue: unknown,
     ): Array<{ operator: Operator; value: unknown }> => {
       if (fieldValue === null || typeof fieldValue !== "object") {
         // Direct assignment is equivalent to $eq
@@ -323,9 +349,7 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
     };
 
     // Transform $prefix operator to $like with escaped value and % suffix
-    const transformPrefixOperator = (
-      fieldValue: unknown
-    ): unknown => {
+    const transformPrefixOperator = (fieldValue: unknown): unknown => {
       if (fieldValue === null || typeof fieldValue !== "object") {
         return fieldValue;
       }
@@ -346,8 +370,32 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
       return result;
     };
 
+    // Transform $between operator to $gte and $lte
+    const transformBetweenOperator = (fieldValue: unknown): unknown => {
+      if (fieldValue === null || typeof fieldValue !== "object") {
+        return fieldValue;
+      }
+
+      const obj = fieldValue as Record<string, unknown>;
+      if (!("$between" in obj)) {
+        return fieldValue;
+      }
+
+      const result: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(obj)) {
+        if (key === "$between" && Array.isArray(value) && value.length === 2) {
+          const [from, to] = value;
+          result.$gte = from;
+          result.$lte = to;
+        } else {
+          result[key] = value;
+        }
+      }
+      return result;
+    };
+
     const splitFulltextOperator = (
-      fieldValue: unknown
+      fieldValue: unknown,
     ): {
       fulltextValue?: unknown;
       hasFulltextValue: boolean;
@@ -379,18 +427,18 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
 
     // Recursively apply field name replacements
     const applyReplacements = (
-      obj: Record<string, unknown>
+      obj: Record<string, unknown>,
     ): Record<string, unknown> => {
       const result: Record<string, unknown> = {};
 
       for (const [key, value] of Object.entries(obj)) {
         if (key === "$and" && Array.isArray(value)) {
           result[key] = value.map((item) =>
-            applyReplacements(item as Record<string, unknown>)
+            applyReplacements(item as Record<string, unknown>),
           );
         } else if (key === "$or" && Array.isArray(value)) {
           result[key] = value.map((item) =>
-            applyReplacements(item as Record<string, unknown>)
+            applyReplacements(item as Record<string, unknown>),
           );
         } else if (
           key === "$not" &&
@@ -404,11 +452,15 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
           const callbackReplacement = callbackReplacementMap.get(key);
           const fulltextReplacement = fulltextReplacementMap.get(key);
           const isPrefixField = prefixFieldSet.has(key);
+          const isBetweenField = betweenFieldSet.has(key);
 
-          // Transform $prefix to $like if this is a prefix field
-          const transformedValue = isPrefixField
-            ? transformPrefixOperator(value)
+          // Transform field-specific syntactic operators before replacement.
+          const betweenTransformedValue = isBetweenField
+            ? transformBetweenOperator(value)
             : value;
+          const transformedValue = isPrefixField
+            ? transformPrefixOperator(betweenTransformedValue)
+            : betweenTransformedValue;
           const {
             fulltextValue,
             hasFulltextValue,
@@ -467,13 +519,13 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
           array: field.array,
           fulltext: "fulltext" in field ? field.fulltext : undefined,
           prefix: "prefix" in field ? field.prefix : undefined,
-        }
+        },
       );
       fieldSchemas[field.field] = fieldComparisonSchema.optional();
     }
 
     const createFilterSchema = (
-      currentDepth: number
+      currentDepth: number,
     ): z.ZodType<FilterQuery<Entity>> => {
       if (currentDepth >= maxDepth) {
         // At max depth, only allow simple field conditions, no nesting
@@ -504,13 +556,13 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
           .refine(
             (obj) => {
               const fieldKeys = Object.keys(obj).filter(
-                (k) => !["$and", "$or", "$not"].includes(k)
+                (k) => !["$and", "$or", "$not"].includes(k),
               );
               return fieldKeys.length <= maxConditions;
             },
             {
               message: `Filter cannot have more than ${maxConditions} field conditions`,
-            }
+            },
           ) as unknown as z.ZodType<FilterQuery<Entity>>;
       }) as unknown as z.ZodType<FilterQuery<Entity>>;
     };
@@ -518,7 +570,7 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
     // Add transform if there are any replacements or fulltext fields
     if (hasTransforms) {
       return createFilterSchema(0).transform((obj) =>
-        applyReplacements(obj as Record<string, unknown>)
+        applyReplacements(obj as Record<string, unknown>),
       ) as unknown as z.ZodType<FilterQuery<Entity>>;
     }
 

@@ -1,4 +1,8 @@
-import { type FieldType, type Operator, type ValueType } from "../types/index.js";
+import {
+  type FieldType,
+  type Operator,
+  type ValueType,
+} from "../types/index.js";
 
 /**
  * Arguments passed to the replacement callback function.
@@ -23,6 +27,7 @@ export interface ReplacementCallbackArgs<Type extends FieldType = never> {
 
   /**
    * The operator being used (e.g., `$eq`, `$ne`, `$in`, `$fulltext`).
+   * Syntactic operators such as `$between` may be expanded before callbacks run.
    */
   operator: Operator;
 

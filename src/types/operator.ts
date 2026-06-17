@@ -13,6 +13,7 @@
  * - `$gt` - Greater than
  * - `$lte` - Less than or equal to
  * - `$gte` - Greater than or equal to
+ * - `$between` - Inclusive range, converted to `$gte` and `$lte`
  *
  * **Array operators (all types):**
  * - `$in` - Value is in array
@@ -35,6 +36,7 @@ export type Operator =
   | "$gt"
   | "$lte"
   | "$gte"
+  | "$between"
   | "$in"
   | "$nin"
   | "$fulltext"
