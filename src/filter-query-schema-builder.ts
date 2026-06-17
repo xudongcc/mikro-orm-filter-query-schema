@@ -89,7 +89,7 @@ function getValueSchema(type: FieldType): z.ZodTypeAny {
 function createTypedComparisonSchema(
   type: FieldType,
   maxArrayLength: number,
-  options?: { array?: boolean; fulltext?: boolean; prefix?: boolean }
+  options?: { array?: boolean; fulltext?: boolean | string; prefix?: boolean }
 ): z.ZodTypeAny {
   const valueSchema = getValueSchema(type);
   const valueWithNull = z.union([valueSchema, z.null()]);
@@ -268,6 +268,7 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
         value: unknown;
       }) => FilterQuery<Entity>
     >();
+    const fulltextReplacementMap = new Map<string, string>();
 
     for (const field of fieldOptions) {
       if (hasStringReplacement(field)) {
@@ -282,6 +283,10 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
           }) => FilterQuery<Entity>
         );
       }
+
+      if ("fulltext" in field && typeof field.fulltext === "string") {
+        fulltextReplacementMap.set(field.field, field.fulltext);
+      }
     }
 
     // Build prefix field set
@@ -295,6 +300,7 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
     const hasTransforms =
       stringReplacementMap.size > 0 ||
       callbackReplacementMap.size > 0 ||
+      fulltextReplacementMap.size > 0 ||
       prefixFieldSet.size > 0;
 
     // Parse field value to extract operator and value pairs
@@ -340,6 +346,37 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
       return result;
     };
 
+    const splitFulltextOperator = (
+      fieldValue: unknown
+    ): {
+      fulltextValue?: unknown;
+      hasFulltextValue: boolean;
+      remainingValue?: unknown;
+      hasRemainingValue: boolean;
+    } => {
+      if (
+        fieldValue === null ||
+        typeof fieldValue !== "object" ||
+        !("$fulltext" in fieldValue)
+      ) {
+        return {
+          remainingValue: fieldValue,
+          hasRemainingValue: true,
+          hasFulltextValue: false,
+        };
+      }
+
+      const { $fulltext: fulltextValue, ...remainingValue } =
+        fieldValue as Record<string, unknown>;
+
+      return {
+        fulltextValue,
+        hasFulltextValue: true,
+        remainingValue,
+        hasRemainingValue: Object.keys(remainingValue).length > 0,
+      };
+    };
+
     // Recursively apply field name replacements
     const applyReplacements = (
       obj: Record<string, unknown>
@@ -365,16 +402,40 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
           // For field conditions, check if replacement is needed
           const stringReplacement = stringReplacementMap.get(key);
           const callbackReplacement = callbackReplacementMap.get(key);
+          const fulltextReplacement = fulltextReplacementMap.get(key);
           const isPrefixField = prefixFieldSet.has(key);
 
           // Transform $prefix to $like if this is a prefix field
           const transformedValue = isPrefixField
             ? transformPrefixOperator(value)
             : value;
+          const {
+            fulltextValue,
+            hasFulltextValue,
+            remainingValue,
+            hasRemainingValue,
+          } =
+            typeof fulltextReplacement === "string"
+              ? splitFulltextOperator(transformedValue)
+              : {
+                  remainingValue: transformedValue,
+                  hasRemainingValue: true,
+                  hasFulltextValue: false,
+                };
+
+          if (hasFulltextValue && typeof fulltextReplacement === "string") {
+            setNestedValue(result, fulltextReplacement, {
+              $fulltext: fulltextValue,
+            });
+          }
+
+          if (!hasRemainingValue) {
+            continue;
+          }
 
           if (callbackReplacement) {
             // Apply callback replacement
-            const parsed = parseFieldValue(transformedValue);
+            const parsed = parseFieldValue(remainingValue);
             for (const { operator, value: parsedValue } of parsed) {
               const replacement = callbackReplacement({
                 field: key,
@@ -386,9 +447,9 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
             }
           } else if (stringReplacement) {
             // Apply string path replacement as nested object
-            setNestedValue(result, stringReplacement, transformedValue);
+            setNestedValue(result, stringReplacement, remainingValue);
           } else {
-            result[key] = transformedValue;
+            result[key] = remainingValue;
           }
         }
       }

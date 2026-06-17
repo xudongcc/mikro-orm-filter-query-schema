@@ -18,7 +18,7 @@
  * - `$in` - Value is in array
  * - `$nin` - Value is not in array
  *
- * **Fulltext operator (string fields with fulltext: true only):**
+ * **Fulltext operator (string fields with fulltext enabled):**
  * - `$fulltext` - Full-text search
  *
  * **Prefix operator (string fields with prefix: true only):**

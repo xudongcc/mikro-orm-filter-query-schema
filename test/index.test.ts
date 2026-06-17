@@ -891,6 +891,7 @@ describe("FilterQuerySchemaBuilder", () => {
     interface Article {
       id: number;
       title: string;
+      searchableTitle: string;
       content: string;
     }
 
@@ -903,6 +904,37 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(schema.safeParse({ title: { $fulltext: "search term" } }).success).toBe(true);
       const result = schema.parse({ title: { $fulltext: "search term" } });
       expect(result).toEqual({ title: { $fulltext: "search term" } });
+    });
+
+    it("should map $fulltext to a configured fulltext field", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({
+          field: "title",
+          type: "string",
+          fulltext: "searchableTitle",
+        })
+        .build();
+
+      const result = schema.parse({ title: { $fulltext: "search term" } });
+      expect(result).toEqual({ searchableTitle: { $fulltext: "search term" } });
+    });
+
+    it("should keep non-fulltext operators on the original field", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({
+          field: "title",
+          type: "string",
+          fulltext: "searchableTitle",
+        })
+        .build();
+
+      const result = schema.parse({
+        title: { $eq: "exact title", $fulltext: "search term" },
+      });
+      expect(result).toEqual({
+        title: { $eq: "exact title" },
+        searchableTitle: { $fulltext: "search term" },
+      });
     });
 
     it("should not allow $fulltext operator when fulltext is not set", () => {

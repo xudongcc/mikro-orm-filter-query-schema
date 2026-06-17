@@ -186,7 +186,7 @@ interface FieldOptions {
   field: string;           // Field name
   type: "string" | "number" | "boolean" | "date";
   array?: boolean;         // Is array field (enables $contains, $overlap)
-  fulltext?: boolean;      // Enable $fulltext operator (string fields only)
+  fulltext?: boolean | string; // Enable $fulltext or map it to a field path
   prefix?: boolean;        // Enable $prefix operator (string fields only)
   replacement?: string | ((args: ReplacementCallbackArgs) => FilterQuery);
 }
@@ -214,13 +214,33 @@ schema.parse({ title: { $eq: "exact match" } });
 // Output: { title: { $eq: "exact match" } }
 ```
 
+You can also point `$fulltext` at a dedicated full-text field while keeping
+normal operators on the original field:
+
+```typescript
+interface Book {
+  title: string;
+  searchableTitle: string;
+}
+
+const schema = new FilterQuerySchemaBuilder<Book>()
+  .addField({ field: "title", type: "string", fulltext: "searchableTitle" })
+  .build();
+
+schema.parse({ title: { $fulltext: "search term" } });
+// Output: { searchableTitle: { $fulltext: "search term" } }
+
+schema.parse({ title: { $eq: "exact title", $fulltext: "search term" } });
+// Output: { title: { $eq: "exact title" }, searchableTitle: { $fulltext: "search term" } }
+```
+
 ### Fulltext Search Operator
 
 | Operator | Description | Example |
 |----------|-------------|---------|
 | `$fulltext` | Full-text search | `{ title: { $fulltext: "search term" } }` |
 
-> Note: The `$fulltext` operator is only available for string fields with `fulltext: true` option.
+> Note: The `$fulltext` operator is only available for string fields with `fulltext: true` or a fulltext field path.
 
 ### Prefix Search
 

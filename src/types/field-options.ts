@@ -8,7 +8,11 @@ import { type FieldType } from "./field-type.js";
  *
  * @typeParam Type - The field's data type
  */
-export type BaseFieldOptions<Type extends FieldType = never> = {
+export type BaseFieldOptions<
+  Entity extends object,
+  Type extends FieldType = never,
+  Field extends string = never,
+> = {
   /**
    * The data type of the field, determines which operators are available.
    */
@@ -29,9 +33,10 @@ export type BaseFieldOptions<Type extends FieldType = never> = {
       /**
        * Whether this field supports full-text search operator.
        * When true, allows the `$fulltext` operator to be used for this field.
+       * When set to a string path, `$fulltext` is mapped to that entity path.
        * Only available for string fields.
        */
-      fulltext?: boolean;
+      fulltext?: boolean | Extract<AutoPath<Entity, Field>, string>;
 
       /**
        * Whether this field supports prefix search operator.
@@ -58,7 +63,8 @@ export type BaseFieldOptions<Type extends FieldType = never> = {
 export type SimpleFieldOptions<
   Entity extends object,
   Type extends FieldType = never,
-> = BaseFieldOptions<Type> & {
+  Field extends string = never,
+> = BaseFieldOptions<Entity, Type, Field> & {
   /**
    * The field name, must be a key of the entity.
    */
@@ -85,7 +91,7 @@ export type ReplacementFieldOptions<
   Entity extends object,
   Type extends FieldType = never,
   Field extends string = never,
-> = BaseFieldOptions<Type> & {
+> = BaseFieldOptions<Entity, Type, Field> & {
   /**
    * The dot-notation path to replace the field with in the output.
    */
@@ -115,7 +121,8 @@ export type ReplacementFieldOptions<
 export type ReplacementCallbackFieldOptions<
   Entity extends object,
   Type extends FieldType = never,
-> = BaseFieldOptions<Type> & {
+  Field extends string = never,
+> = BaseFieldOptions<Entity, Type, Field> & {
   /**
    * A callback function that transforms the field value into a FilterQuery.
    * @param args - The replacement callback arguments containing field, operator, and value
@@ -136,6 +143,6 @@ export type FieldOptions<
   Type extends FieldType = never,
   Field extends string = never,
 > =
-  | SimpleFieldOptions<Entity, Type>
+  | SimpleFieldOptions<Entity, Type, Field>
   | ReplacementFieldOptions<Entity, Type, Field>
-  | ReplacementCallbackFieldOptions<Entity, Type>;
+  | ReplacementCallbackFieldOptions<Entity, Type, Field>;
