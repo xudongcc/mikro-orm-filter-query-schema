@@ -1,4 +1,5 @@
 import { FilterQuery } from "@mikro-orm/core";
+import dayjs, { type ManipulateType } from "dayjs";
 import { z } from "zod";
 
 import { FilterOptions } from "./interfaces/filter-options.interface.js";
@@ -62,6 +63,62 @@ function escapeLikePattern(value: string): string {
   return value.replace(/[%_\\]/g, "\\$&");
 }
 
+const relativeDatePattern = /^\s*([+-]?\d+)\s*([A-Za-z]+)\s*$/;
+
+const relativeDateShortUnitMap = new Map<string, ManipulateType>([
+  ["s", "second"],
+  ["m", "minute"],
+  ["h", "hour"],
+  ["d", "day"],
+  ["w", "week"],
+  ["M", "month"],
+  ["y", "year"],
+]);
+
+const relativeDateLongUnitMap = new Map<string, ManipulateType>([
+  ["second", "second"],
+  ["seconds", "second"],
+  ["minute", "minute"],
+  ["minutes", "minute"],
+  ["hour", "hour"],
+  ["hours", "hour"],
+  ["day", "day"],
+  ["days", "day"],
+  ["week", "week"],
+  ["weeks", "week"],
+  ["month", "month"],
+  ["months", "month"],
+  ["year", "year"],
+  ["years", "year"],
+]);
+
+function getRelativeDateUnit(unit: string): ManipulateType | undefined {
+  if (unit.length === 1) {
+    return relativeDateShortUnitMap.get(unit);
+  }
+
+  return relativeDateLongUnitMap.get(unit.toLowerCase());
+}
+
+/**
+ * Parses signed relative date strings such as `1h`, `-7d`, and `+2weeks`.
+ * @internal
+ */
+function parseRelativeDate(value: string): Date | undefined {
+  const match = relativeDatePattern.exec(value);
+  if (!match) {
+    return undefined;
+  }
+
+  const amount = Number(match[1]);
+  const unit = getRelativeDateUnit(match[2]);
+  if (!Number.isSafeInteger(amount) || !unit) {
+    return undefined;
+  }
+
+  return dayjs().add(amount, unit).toDate();
+}
+
 /**
  * Creates a Zod schema for a specific field type.
  * @internal
@@ -79,6 +136,18 @@ function getValueSchema(type: FieldType): z.ZodTypeAny {
         z.iso.datetime({ offset: true, local: true }),
         z.iso.date(),
         z.date(),
+        z.string().transform((value, ctx) => {
+          const date = parseRelativeDate(value);
+          if (!date) {
+            ctx.addIssue({
+              code: "custom",
+              message: "Invalid relative date",
+            });
+            return z.NEVER;
+          }
+
+          return date;
+        }),
       ]);
   }
 }

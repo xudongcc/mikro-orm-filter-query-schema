@@ -1,3 +1,5 @@
+import { jest } from "@jest/globals";
+
 import { FilterQuerySchemaBuilder } from "../src/filter-query-schema-builder.js";
 import type { FilterOptions } from "../src/interfaces/filter-options.interface.js";
 
@@ -610,6 +612,42 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(schema.safeParse({ createdAt: date }).success).toBe(true);
       expect(schema.safeParse({ createdAt: { $eq: date } }).success).toBe(true);
       expect(schema.safeParse({ createdAt: { $gt: date } }).success).toBe(true);
+    });
+
+    it("should transform relative date strings to Date objects", () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date("2024-01-15T10:30:00Z"));
+
+      try {
+        expect(schema.parse({ createdAt: "1h" })).toEqual({
+          createdAt: new Date("2024-01-15T11:30:00Z"),
+        });
+        expect(schema.parse({ createdAt: { $gte: "-7d" } })).toEqual({
+          createdAt: { $gte: new Date("2024-01-08T10:30:00Z") },
+        });
+        expect(schema.parse({ createdAt: { $lt: "+2weeks" } })).toEqual({
+          createdAt: { $lt: new Date("2024-01-29T10:30:00Z") },
+        });
+        expect(
+          schema.parse({ createdAt: { $between: ["-1w", "1M"] } }),
+        ).toEqual({
+          createdAt: {
+            $gte: new Date("2024-01-08T10:30:00Z"),
+            $lte: new Date("2024-02-15T10:30:00Z"),
+          },
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("should reject quarter and millisecond relative date units", () => {
+      expect(schema.safeParse({ createdAt: "1Q" }).success).toBe(false);
+      expect(schema.safeParse({ createdAt: "1quarter" }).success).toBe(false);
+      expect(schema.safeParse({ createdAt: "1ms" }).success).toBe(false);
+      expect(schema.safeParse({ createdAt: "1millisecond" }).success).toBe(
+        false,
+      );
     });
   });
 
