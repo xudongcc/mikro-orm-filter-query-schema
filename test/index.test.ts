@@ -625,7 +625,7 @@ describe("FilterQuerySchemaBuilder", () => {
         expect(schema.parse({ createdAt: { $gte: "-7d" } })).toEqual({
           createdAt: { $gte: new Date("2024-01-08T10:30:00Z") },
         });
-        expect(schema.parse({ createdAt: { $lt: "+2weeks" } })).toEqual({
+        expect(schema.parse({ createdAt: { $lt: "+2w" } })).toEqual({
           createdAt: { $lt: new Date("2024-01-29T10:30:00Z") },
         });
         expect(
@@ -648,6 +648,14 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(schema.safeParse({ createdAt: "1millisecond" }).success).toBe(
         false,
       );
+    });
+
+    it("should reject long and plural relative date units", () => {
+      expect(schema.safeParse({ createdAt: "1second" }).success).toBe(false);
+      expect(schema.safeParse({ createdAt: "1minutes" }).success).toBe(false);
+      expect(schema.safeParse({ createdAt: "+2weeks" }).success).toBe(false);
+      expect(schema.safeParse({ createdAt: "1month" }).success).toBe(false);
+      expect(schema.safeParse({ createdAt: "1years" }).success).toBe(false);
     });
 
     it("should reject relative date offsets that overflow valid Date range", () => {

@@ -75,33 +75,12 @@ const relativeDateShortUnitMap = new Map<string, ManipulateType>([
   ["y", "year"],
 ]);
 
-const relativeDateLongUnitMap = new Map<string, ManipulateType>([
-  ["second", "second"],
-  ["seconds", "second"],
-  ["minute", "minute"],
-  ["minutes", "minute"],
-  ["hour", "hour"],
-  ["hours", "hour"],
-  ["day", "day"],
-  ["days", "day"],
-  ["week", "week"],
-  ["weeks", "week"],
-  ["month", "month"],
-  ["months", "month"],
-  ["year", "year"],
-  ["years", "year"],
-]);
-
 function getRelativeDateUnit(unit: string): ManipulateType | undefined {
-  if (unit.length === 1) {
-    return relativeDateShortUnitMap.get(unit);
-  }
-
-  return relativeDateLongUnitMap.get(unit.toLowerCase());
+  return relativeDateShortUnitMap.get(unit);
 }
 
 /**
- * Parses signed relative date strings such as `1h`, `-7d`, and `+2weeks`.
+ * Parses signed relative date strings such as `1h`, `-7d`, and `+2w`.
  * @internal
  */
 function parseRelativeDate(value: string): Date | undefined {

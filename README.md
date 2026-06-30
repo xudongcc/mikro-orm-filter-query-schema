@@ -18,7 +18,7 @@ yarn add mikro-orm-filter-query-schema
 - Configurable security limits to prevent DoS attacks
 - Support for all MikroORM comparison operators
 - Inclusive `$between` range shorthand for number and date fields
-- Relative date offsets such as `-7d`, `1h`, and `+2weeks`
+- Relative date offsets such as `-7d`, `1h`, and `+2w`
 - Field whitelist validation
 - Nested logical operators (`$and`, `$or`, `$not`)
 - Field name replacement (string path or callback function)
@@ -173,7 +173,7 @@ schema.parse({ createdAt: { $between: ["-1w", "1M"] } });
 // Output: { createdAt: { $gte: Date, $lte: Date } }
 ```
 
-Relative date offsets use `[+|-]number + unit`. When the sign is omitted, the offset is added to the current time. Supported short units are `s`, `m`, `h`, `d`, `w`, `M`, and `y`; `m` means minute and `M` means month. Long and plural units are also supported: `second(s)`, `minute(s)`, `hour(s)`, `day(s)`, `week(s)`, `month(s)`, and `year(s)`. Quarter and millisecond units are not supported.
+Relative date offsets use `[+|-]number + unit`. When the sign is omitted, the offset is added to the current time. Supported units are `s`, `m`, `h`, `d`, `w`, `M`, and `y`; `m` means minute and `M` means month. Long and plural units, quarter units, and millisecond units are not supported.
 
 ### Array Operators
 
