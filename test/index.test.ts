@@ -1,3 +1,5 @@
+import { jest } from "@jest/globals";
+
 import { FilterQuerySchemaBuilder } from "../src/filter-query-schema-builder.js";
 import type { FilterOptions } from "../src/interfaces/filter-options.interface.js";
 
@@ -611,6 +613,48 @@ describe("FilterQuerySchemaBuilder", () => {
       expect(schema.safeParse({ createdAt: { $eq: date } }).success).toBe(true);
       expect(schema.safeParse({ createdAt: { $gt: date } }).success).toBe(true);
     });
+
+    it("should transform relative date strings to Date objects", () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date("2024-01-15T10:30:00Z"));
+
+      try {
+        expect(schema.parse({ createdAt: "1h" })).toEqual({
+          createdAt: new Date("2024-01-15T11:30:00Z"),
+        });
+        expect(schema.parse({ createdAt: { $gte: "-7d" } })).toEqual({
+          createdAt: { $gte: new Date("2024-01-08T10:30:00Z") },
+        });
+        expect(schema.parse({ createdAt: { $lt: "+2weeks" } })).toEqual({
+          createdAt: { $lt: new Date("2024-01-29T10:30:00Z") },
+        });
+        expect(
+          schema.parse({ createdAt: { $between: ["-1w", "1M"] } }),
+        ).toEqual({
+          createdAt: {
+            $gte: new Date("2024-01-08T10:30:00Z"),
+            $lte: new Date("2024-02-15T10:30:00Z"),
+          },
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("should reject quarter and millisecond relative date units", () => {
+      expect(schema.safeParse({ createdAt: "1Q" }).success).toBe(false);
+      expect(schema.safeParse({ createdAt: "1quarter" }).success).toBe(false);
+      expect(schema.safeParse({ createdAt: "1ms" }).success).toBe(false);
+      expect(schema.safeParse({ createdAt: "1millisecond" }).success).toBe(
+        false,
+      );
+    });
+
+    it("should reject relative date offsets that overflow valid Date range", () => {
+      expect(schema.safeParse({ createdAt: "9007199254740991y" }).success).toBe(
+        false,
+      );
+    });
   });
 
   describe("Negative tests - validation in nested queries", () => {
@@ -916,6 +960,7 @@ describe("FilterQuerySchemaBuilder", () => {
       title: string;
       content: string;
       tags: string[];
+      publishedAt: Date;
     }
 
     it("should support callback function replacement for simple values", () => {
@@ -957,6 +1002,31 @@ describe("FilterQuerySchemaBuilder", () => {
       // Using $ne operator
       const result2 = schema.parse({ search: { $ne: "excluded" } });
       expect(result2).toEqual({ title: { $ne: "excluded" } });
+    });
+
+    it("should receive direct relative date values as $eq in callback", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({
+          field: "publishedAt",
+          type: "date",
+          replacement: ({ operator, value }) => ({
+            publishedAt: { [operator]: value },
+          }),
+        })
+        .build();
+
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date("2024-01-15T10:30:00Z"));
+
+      try {
+        const result = schema.parse({ publishedAt: "1h" });
+
+        expect(result).toEqual({
+          publishedAt: { $eq: new Date("2024-01-15T11:30:00Z") },
+        });
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it("should support callback replacement in $and", () => {

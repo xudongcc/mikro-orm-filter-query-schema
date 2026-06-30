@@ -7,7 +7,7 @@
  *   With `fulltext` enabled, also supports `$fulltext` operator.
  * - `"number"` - Validates numeric values, supports comparison operators (`$gt`, `$gte`, `$lt`, `$lte`, `$between`)
  * - `"boolean"` - Validates boolean values, only supports `$eq`, `$ne`, `$in`, `$nin`
- * - `"date"` - Validates Date objects and ISO date strings, supports comparison operators
- *   including `$between`
+ * - `"date"` - Validates Date objects, ISO date strings, and relative date offsets,
+ *   supports comparison operators including `$between`
  */
 export type FieldType = "string" | "number" | "boolean" | "date";
