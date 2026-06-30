@@ -116,7 +116,12 @@ function parseRelativeDate(value: string): Date | undefined {
     return undefined;
   }
 
-  return dayjs().add(amount, unit).toDate();
+  const date = dayjs().add(amount, unit).toDate();
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return date;
 }
 
 /**
@@ -402,7 +407,11 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
     const parseFieldValue = (
       fieldValue: unknown,
     ): Array<{ operator: Operator; value: unknown }> => {
-      if (fieldValue === null || typeof fieldValue !== "object") {
+      if (
+        fieldValue === null ||
+        typeof fieldValue !== "object" ||
+        fieldValue instanceof Date
+      ) {
         // Direct assignment is equivalent to $eq
         return [{ operator: "$eq", value: fieldValue }];
       }

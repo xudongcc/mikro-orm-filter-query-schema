@@ -649,6 +649,12 @@ describe("FilterQuerySchemaBuilder", () => {
         false,
       );
     });
+
+    it("should reject relative date offsets that overflow valid Date range", () => {
+      expect(schema.safeParse({ createdAt: "9007199254740991y" }).success).toBe(
+        false,
+      );
+    });
   });
 
   describe("Negative tests - validation in nested queries", () => {
@@ -954,6 +960,7 @@ describe("FilterQuerySchemaBuilder", () => {
       title: string;
       content: string;
       tags: string[];
+      publishedAt: Date;
     }
 
     it("should support callback function replacement for simple values", () => {
@@ -995,6 +1002,31 @@ describe("FilterQuerySchemaBuilder", () => {
       // Using $ne operator
       const result2 = schema.parse({ search: { $ne: "excluded" } });
       expect(result2).toEqual({ title: { $ne: "excluded" } });
+    });
+
+    it("should receive direct relative date values as $eq in callback", () => {
+      const schema = new FilterQuerySchemaBuilder<Article>()
+        .addField({
+          field: "publishedAt",
+          type: "date",
+          replacement: ({ operator, value }) => ({
+            publishedAt: { [operator]: value },
+          }),
+        })
+        .build();
+
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date("2024-01-15T10:30:00Z"));
+
+      try {
+        const result = schema.parse({ publishedAt: "1h" });
+
+        expect(result).toEqual({
+          publishedAt: { $eq: new Date("2024-01-15T11:30:00Z") },
+        });
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it("should support callback replacement in $and", () => {
