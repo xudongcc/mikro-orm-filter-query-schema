@@ -22,6 +22,7 @@ yarn add mikro-orm-filter-query-schema
 - Field whitelist validation
 - Nested logical operators (`$and`, `$or`, `$not`)
 - Field name replacement (string path or callback function)
+- Configurable full-text value transformation during validation
 
 ## Usage
 
@@ -137,6 +138,45 @@ The callback receives an object with:
 - `field`: The original field name
 - `operator`: The operator being used (`$eq`, `$ne`, `$in`, `$fulltext`, etc.)
 - `value`: The value associated with the operator
+
+### Full-text Value Transformation
+
+Configure `operatorTransforms.$fulltext` to normalize full-text strings during
+schema parsing. For example, use the same multilingual tokenizer as the indexed
+column:
+
+```typescript
+const segmenter = new Intl.Segmenter(undefined, { granularity: "word" });
+
+const schema = new FilterQuerySchemaBuilder<Article>({
+  operatorTransforms: {
+    $fulltext: (value) =>
+      Array.from(segmenter.segment(value))
+        .filter(({ isWordLike }) => isWordLike)
+        .map(({ segment }) => segment.toLowerCase())
+        .join(" "),
+  },
+})
+  .addField({ field: "title", type: "string", fulltext: "content" })
+  .build();
+
+schema.parse({ title: { $fulltext: "你好世界 HELLO!" } });
+// Output: { content: { $fulltext: "你好 世界 hello" } }
+```
+
+The hook runs after the operand passes string validation and before full-text
+path mapping or replacement callbacks. It also runs inside `$and`, `$or`, and
+`$not`. Each field must still enable `fulltext`; other operators and direct field
+values remain unchanged. The result must be a string and is validated again.
+An empty result stays an empty `$fulltext` condition rather than removing the
+constraint. Without a hook, full-text values retain their existing behavior.
+
+The hook only transforms values supplied through `$fulltext` in the input. It
+does not traverse or rewrite query fragments returned by replacement callbacks.
+Use a pure synchronous callback; callbacks may run before other conditions in the
+filter finish validation. Match the indexed column's tokenization when choosing
+the transform. The library does not include a tokenizer or add dependencies for
+this hook. Currently `$fulltext` is the only configurable operator transform.
 
 ## Supported Operators
 

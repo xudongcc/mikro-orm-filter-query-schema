@@ -143,7 +143,12 @@ function getValueSchema(type: FieldType): z.ZodTypeAny {
 function createTypedComparisonSchema(
   type: FieldType,
   maxArrayLength: number,
-  options?: { array?: boolean; fulltext?: boolean | string; prefix?: boolean },
+  options?: {
+    array?: boolean;
+    fulltext?: boolean | string;
+    prefix?: boolean;
+    operatorTransforms?: FilterOptions["operatorTransforms"];
+  },
 ): z.ZodTypeAny {
   const valueSchema = getValueSchema(type);
   const valueWithNull = z.union([valueSchema, z.null()]);
@@ -181,7 +186,15 @@ function createTypedComparisonSchema(
 
   // Fulltext search operator (only for string fields)
   if (options?.fulltext) {
-    comparisonFields.$fulltext = valueSchema.optional();
+    const transform = options.operatorTransforms?.$fulltext;
+    comparisonFields.$fulltext = (
+      transform
+        ? z
+            .string()
+            .transform((value) => transform(value))
+            .pipe(z.string())
+        : valueSchema
+    ).optional();
   }
 
   // Prefix search operator (only for string fields)
@@ -259,7 +272,7 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
   /**
    * Creates a new FilterQuerySchemaBuilder instance.
    *
-   * @param options - Optional configuration for validation limits
+   * @param options - Optional validation limits and operator value transforms
    */
   constructor(options?: Partial<FilterOptions>) {
     this.options = {
@@ -576,6 +589,7 @@ export class FilterQuerySchemaBuilder<Entity extends object> {
           array: field.array,
           fulltext: "fulltext" in field ? field.fulltext : undefined,
           prefix: "prefix" in field ? field.prefix : undefined,
+          operatorTransforms: this.options.operatorTransforms,
         },
       );
       fieldSchemas[field.field] = fieldComparisonSchema.optional();
