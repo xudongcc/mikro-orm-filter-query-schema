@@ -154,52 +154,52 @@ function createTypedComparisonSchema(
   const valueWithNull = z.union([valueSchema, z.null()]);
   const rangeOperators = ["$gt", "$gte", "$lt", "$lte"];
 
-  const comparisonFields: Record<string, z.ZodTypeAny> = {
-    $eq: valueWithNull.optional(),
-    $ne: valueWithNull.optional(),
+  const comparisonFields: Partial<Record<Operator, z.ZodTypeAny>> = {
+    $eq: valueWithNull,
+    $ne: valueWithNull,
   };
 
   // Comparison operators only apply to number and date types
   if (type === "number" || type === "date") {
-    comparisonFields.$gt = valueSchema.optional();
-    comparisonFields.$gte = valueSchema.optional();
-    comparisonFields.$lt = valueSchema.optional();
-    comparisonFields.$lte = valueSchema.optional();
-    comparisonFields.$between = z.tuple([valueSchema, valueSchema]).optional();
+    comparisonFields.$gt = valueSchema;
+    comparisonFields.$gte = valueSchema;
+    comparisonFields.$lt = valueSchema;
+    comparisonFields.$lte = valueSchema;
+    comparisonFields.$between = z.tuple([valueSchema, valueSchema]);
   }
 
   // $in and $nin apply to all types
-  comparisonFields.$in = z.array(valueWithNull).max(maxArrayLength).optional();
-  comparisonFields.$nin = z.array(valueWithNull).max(maxArrayLength).optional();
+  comparisonFields.$in = z.array(valueWithNull).max(maxArrayLength);
+  comparisonFields.$nin = z.array(valueWithNull).max(maxArrayLength);
 
   // Array field specific operators
   if (options?.array) {
-    comparisonFields.$contains = z
-      .array(valueSchema)
-      .max(maxArrayLength)
-      .optional();
-    comparisonFields.$overlap = z
-      .array(valueSchema)
-      .max(maxArrayLength)
-      .optional();
+    comparisonFields.$contains = z.array(valueSchema).max(maxArrayLength);
+    comparisonFields.$overlap = z.array(valueSchema).max(maxArrayLength);
   }
 
   // Fulltext search operator (only for string fields)
   if (options?.fulltext) {
-    const transform = options.operatorTransforms?.$fulltext;
-    comparisonFields.$fulltext = (
-      transform
-        ? z
-            .string()
-            .transform((value) => transform(value))
-            .pipe(z.string())
-        : valueSchema
-    ).optional();
+    comparisonFields.$fulltext = valueSchema;
   }
 
   // Prefix search operator (only for string fields)
   if (options?.prefix) {
-    comparisonFields.$prefix = valueSchema.optional();
+    comparisonFields.$prefix = valueSchema;
+  }
+
+  for (const operator of Object.keys(comparisonFields) as Operator[]) {
+    const operandSchema = comparisonFields[operator]!;
+    const transform = options?.operatorTransforms?.[operator] as
+      | ((value: unknown) => unknown)
+      | undefined;
+    comparisonFields[operator] = (
+      transform
+        ? operandSchema
+            .transform((value) => transform(value))
+            .pipe(operandSchema)
+        : operandSchema
+    ).optional();
   }
 
   const comparisonObjectSchema = z

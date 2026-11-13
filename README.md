@@ -22,7 +22,7 @@ yarn add mikro-orm-filter-query-schema
 - Field whitelist validation
 - Nested logical operators (`$and`, `$or`, `$not`)
 - Field name replacement (string path or callback function)
-- Configurable full-text value transformation during validation
+- Configurable operator value transformations during validation
 
 ## Usage
 
@@ -139,7 +139,59 @@ The callback receives an object with:
 - `operator`: The operator being used (`$eq`, `$ne`, `$in`, `$fulltext`, etc.)
 - `value`: The value associated with the operator
 
-### Full-text Value Transformation
+### Operator Value Transformations
+
+Use `operatorTransforms` to normalize explicit comparison operands during schema
+parsing, before field mapping or replacement callbacks:
+
+```typescript
+const schema = new FilterQuerySchemaBuilder<User>({
+  operatorTransforms: {
+    $eq: (value) => (typeof value === "string" ? value.trim() : value),
+    $in: (values) =>
+      values.map((value) => (typeof value === "string" ? value.trim() : value)),
+  },
+})
+  .addField({ field: "name", type: "string" })
+  .build();
+
+schema.parse({ name: { $in: [" Alice ", " Bob ", null] } });
+// Output: { name: { $in: ["Alice", "Bob", null] } }
+```
+
+Every comparison operator is configurable. `OperatorTransforms` and
+`OperatorValueMap` are exported for typed configuration:
+
+| Operators                    | Callback operand                          |
+| ---------------------------- | ----------------------------------------- |
+| `$eq`, `$ne`                 | Scalar value or `null`                    |
+| `$lt`, `$gt`, `$lte`, `$gte` | Number or date value                      |
+| `$between`                   | A two-value range tuple                   |
+| `$in`, `$nin`                | Entire array, including nullable elements |
+| `$contains`, `$overlap`      | Entire array of non-null scalar values    |
+| `$fulltext`, `$prefix`       | String                                    |
+
+Global callbacks apply to all fields that enable the operator. Their scalar
+types are unions: narrow by type when an operator applies to multiple field
+types. Date values may be ISO strings or `Date` objects; relative date strings
+are parsed to `Date` before invoking the hook.
+
+Both input and output must satisfy the original field's operand schema,
+including type, range tuple size, and array length limits. Hooks do not enable
+unsupported operators. Missing or `undefined` operands are skipped; explicit
+`null` is passed to hooks for operators that allow it.
+
+Hooks also run inside `$and`, `$or`, and `$not`. Direct field assignments such as
+`{ name: " Alice " }` keep their original values; use an explicit `$eq` to invoke
+that hook. `$between` is transformed before expansion to `$gte`/`$lte`, and
+`$prefix` before escaping and conversion to `$like`. Generated operators and
+query fragments returned by replacement callbacks are not transformed again.
+
+Use pure synchronous callbacks: they may run before other conditions in the
+filter finish validation. Operators without a configured hook keep their
+existing behavior.
+
+#### Full-text Tokenization
 
 Configure `operatorTransforms.$fulltext` to normalize full-text strings during
 schema parsing. For example, use the same multilingual tokenizer as the indexed
@@ -164,19 +216,11 @@ schema.parse({ title: { $fulltext: "你好世界 HELLO!" } });
 // Output: { content: { $fulltext: "你好 世界 hello" } }
 ```
 
-The hook runs after the operand passes string validation and before full-text
-path mapping or replacement callbacks. It also runs inside `$and`, `$or`, and
-`$not`. Each field must still enable `fulltext`; other operators and direct field
-values remain unchanged. The result must be a string and is validated again.
-An empty result stays an empty `$fulltext` condition rather than removing the
-constraint. Without a hook, full-text values retain their existing behavior.
-
-The hook only transforms values supplied through `$fulltext` in the input. It
-does not traverse or rewrite query fragments returned by replacement callbacks.
-Use a pure synchronous callback; callbacks may run before other conditions in the
-filter finish validation. Match the indexed column's tokenization when choosing
-the transform. The library does not include a tokenizer or add dependencies for
-this hook. Currently `$fulltext` is the only configurable operator transform.
+Each field must still enable `fulltext`. The callback receives and returns a
+string; an empty result stays an empty `$fulltext` condition rather than removing
+the constraint. Match the indexed column's tokenization when choosing the
+transform. The library does not include a tokenizer or add dependencies for
+these hooks.
 
 ## Supported Operators
 

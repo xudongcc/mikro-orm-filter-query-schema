@@ -1,3 +1,5 @@
+import type { OperatorTransforms } from "../types/operator-transforms.js";
+
 /**
  * Configuration options for filter query validation and value transforms.
  *
@@ -42,15 +44,8 @@ export interface FilterOptions {
 
   /**
    * Optional transforms for validated operator values, before field replacement.
-   * Currently supports `$fulltext`; fields must still enable `fulltext`.
+   * Supports every comparison operator enabled for a field.
+   * Results are validated against the original operand schema, including limits.
    */
-  operatorTransforms?: {
-    /**
-     * Transforms each full-text string before field mapping or replacement callbacks.
-     * The result must be a string. Empty strings remain full-text conditions.
-     * @param value - Validated full-text string from the input query.
-     * @returns The full-text string to use in the output query.
-     */
-    $fulltext?: (value: string) => string;
-  };
+  operatorTransforms?: OperatorTransforms;
 }
