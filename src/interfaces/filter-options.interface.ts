@@ -1,5 +1,7 @@
+import type { OperatorTransforms } from "../types/operator-transforms.js";
+
 /**
- * Configuration options for filter query validation limits.
+ * Configuration options for filter query validation and value transforms.
  *
  * @remarks
  * These options help prevent denial-of-service attacks by limiting
@@ -39,4 +41,11 @@ export interface FilterOptions {
    * @defaultValue 100
    */
   maxArrayLength: number;
+
+  /**
+   * Optional transforms for validated operator values, before field replacement.
+   * Supports every comparison operator enabled for a field.
+   * Results are validated against the original operand schema, including limits.
+   */
+  operatorTransforms?: OperatorTransforms;
 }
